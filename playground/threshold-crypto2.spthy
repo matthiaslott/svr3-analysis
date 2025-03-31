@@ -1,0 +1,112 @@
+theory Threshold2
+
+begin
+
+builtins: natural-numbers, multiset
+
+predicates: LT(x, y) <=> x ⊏ y
+          , EQ(x, y) <=> x = y
+          , LEQ(x, y) <=> x ⊏ y | x = y
+          , IS_IN(el, set) <=> el << set | el = set
+
+functions:
+    share/2 // share id, secret
+  , combine/3 [private] // share1, share2, share3
+
+equations:
+    // IMPORTANT:
+    // - Combine function is private. Adversary has special combine rule that checks distinctness of sids.
+    // - Client also needs to check disjointness of ids every time combine is used
+    combine(share(sid1, secret), share(sid2, secret), share(sid3, secret)) = secret
+
+
+// create environment
+rule create_server:
+    []
+  --[]->
+    [ !Server($sid) ]
+
+// TODO: Consider if this can be removed. !Group isn't used in other rules
+rule create_group:
+    [ !Server($sid1), !Server($sid2), !Server($sid3) ]
+  --[
+        CreatedGroup($sid1 ++ $sid2 ++ $sid3, %1 %+ %1 %+ %1, %1 %+ %1 %+ %1)
+      , OnlyOnce('group_creation') // ensure that there is only one group for now
+      , _restrict(not ($sid1 = $sid2 | $sid1 = $sid3 | $sid2 = $sid3)) // ensure that there are 3 distinct servers in the group
+    ]->
+    [ !Group($sid1 ++ $sid2 ++ $sid3, %1 %+ %1 %+ %1, %1 %+ %1 %+ %1) ]
+
+// adversary share combination
+rule adversary_combine:
+    [ In(share(sid1, secret)), In(share(sid2, secret)), In(share(sid3, secret)) ]
+  --[  _restrict(not (sid1 = sid2 | sid1 = sid3 | sid2 = sid3))]->
+    [ Out(combine(share(sid1, secret), share(sid2, secret), share(sid3, secret))) ]
+
+// protocol run
+
+rule client_0: // initialise the client and prepare for communication with server
+    [ Fr(~pw), Fr(~cid), Fr(~secret), Fr(~koprf) ]
+  --[ Secret(~cid, ~koprf) ]->
+    [ Client_0(~pw, ~cid, ~koprf) ]
+
+rule client_0_send: // TODO: Think about enforcing that client communicates with EVERY server EXACTLY ONCE
+    [ Client_0(~pw, ~cid, ~koprf), !Server($sid) ]
+  --[ ]->
+    [ Client_0(~pw, ~cid, ~koprf), Out(<$sid, share($sid, ~koprf)>) ]
+
+rule client_1:
+    [ Client_0(~pw, ~cid, ~koprf) ]
+  --[]->
+    [ Client_1(~pw, ~cid) ]
+
+
+// receive (arbitrary) shares and combine them
+rule client_1_recv:
+    [ Client_1(~pw, ~cid), In(shr) ]
+  --[]->
+    [ Client_1(~pw, ~cid), ClientShare(~cid, shr) ]
+
+
+rule client_2:
+    // Question: Should this pattern matching be allowed?
+    // - Allows client to notice if the adversary sends shares for DIFFERENT secrets
+    // - Allows client to notice if the adversary sends SAME share multiple times
+    let
+      shr1 = share(sid1, secret)
+      shr2 = share(sid2, secret)
+      shr3 = share(sid3, secret)
+    in
+    [ Client_1(~pw, ~cid), ClientShare(~cid, shr1), ClientShare(~cid, shr2), ClientShare(~cid, shr3) ]
+  --[
+      _restrict(not (sid1 = sid2 | sid1 = sid3 | sid2 = sid3))
+    ]->
+    [ Client_2(~pw, ~cid, combine(shr1, shr2, shr3)) ]
+
+rule client_3:
+    [Client_2(~pw, ~cid, secret) ]
+  --[
+      ClientKnows(~cid, secret)
+    ]->
+    []
+
+// other rules
+
+
+// restrictions
+restriction OnlyOnce:
+    "All #i #j v. OnlyOnce(v)@#i & OnlyOnce(v)@#j ==> #i = #j"
+
+
+lemma executable: // works
+    exists-trace "Ex sid1 sid2 sid3 #i. CreatedGroup(sid1 ++ sid2 ++ sid3, %1 %+ %1 %+ %1, %1 %+ %1 %+ %1)@#i"
+
+lemma executable2: // works
+    exists-trace "Ex cid koprf #i. Secret(cid, koprf)@#i"
+
+lemma executable3: // can be autoproven, but not that fast (~40s)
+    exists-trace "Ex cid koprf #i #j. Secret(cid, koprf)@#i & K(koprf)@#j"
+
+lemma executable4: // not autoproven in reasonable time
+    exists-trace "Ex cid koprf #i #j. Secret(cid, koprf)@#i & ClientKnows(cid, koprf)@#j"
+
+end

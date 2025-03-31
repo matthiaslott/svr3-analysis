@@ -21,34 +21,38 @@ functions:
 
 
 // create environment
+rule create_server:
+    []
+  --[]->
+    [ !Server($sid) ]
+
 rule create_group:
-    [ Fr(~sid1), Fr(~sid2), Fr(~sid3) ]
+    [ !Server($sid1), !Server($sid2), !Server($sid3) ]
   --[
-        CreatedGroup(~sid1 ++ ~sid2 ++ ~sid3, %1 %+ %1 %+ %1, %1 %+ %1 %+ %1)
+        CreatedGroup($sid1 ++ $sid2 ++ $sid3, %1 %+ %1 %+ %1, %1 %+ %1 %+ %1)
       , OnlyOnce('group_creation') // ensure that there is only one group for now
+      , _restrict(not ($sid1 = $sid2 | $sid1 = $sid3 | $sid2 = $sid3)) // ensure that there are 3 distinct servers in the group
     ]->
-    [ !Group(~sid1 ++ ~sid2 ++ ~sid3, %1 %+ %1 %+ %1, %1 %+ %1 %+ %1)
-    , !Server(~sid1), !Server(~sid2), !Server(~sid3)
-    , Out(~sid1), Out(~sid2), Out(~sid3) ]
+    [ !Group($sid1 ++ $sid2 ++ $sid3, %1 %+ %1 %+ %1, %1 %+ %1 %+ %1) ]
 
 
 // Threshold Logic:
 // Provide a way to "store" shares for every agent (including the adversary)
 // Shares are tagged with a purpose to allow retrieving without knowing the exact secret (see retrieve rules)
 
-rule combine_shares:
-    [ !Share(agent, purpose, share(other_members, %a, secret)), !Share(agent, purpose, share(~sid, %1, secret)), !Server(~sid) ]
+rule combine_shares[no_derivcheck]:
+    [ !Share(agent, purpose, share(other_members, %a, secret)), !Share(agent, purpose, share($sid, %1, secret)), !Server($sid) ]
   --[
-        _restrict(not IS_IN(~sid, other_members)) // maintain the invariant that the member_list is a set
+        _restrict(not IS_IN($sid, other_members)) // maintain the invariant that the member_list is a set
     ]->
-    [ !Share(agent, purpose, share(other_members ++ ~sid, %a %+ %1, secret)) ]
+    [ !Share(agent, purpose, share(other_members ++ $sid, %a %+ %1, secret)) ]
 
-rule split_shares:
-    [ !Share(agent, purpose, share(other_members ++ ~sid, %a %+ %1, secret)), !Server(~sid) ]
+rule split_shares[no_derivcheck]:
+    [ !Share(agent, purpose, share(other_members ++ $sid, %a %+ %1, secret)), !Server($sid) ]
   --[]->
-    [ !Share(agent, purpose, share(other_members, %a, secret)), !Share(agent, purpose, share(~sid, %1, secret)) ]
+    [ !Share(agent, purpose, share(other_members, %a, secret)), !Share(agent, purpose, share($sid, %1, secret)) ]
 
-rule retrieve_complete:
+rule retrieve_complete[no_derivcheck]:
     [ !Share(agent, purpose, share(share_members, %a, secret)), !Group(members, %n, %t) ]
   --[
         _restrict(LEQ(%t, %a)) // sufficient number of shares present
@@ -56,7 +60,7 @@ rule retrieve_complete:
     ]->
     [ CompleteSecret(agent, purpose, secret) ]
 
-rule retrieve_partial:
+rule retrieve_partial[no_derivcheck]:
     [ !Share(agent, purpose, share(share_members, %a, secret)) ]
   --[
         RetrievedPartial(agent, purpose, share_members, secret)
@@ -70,7 +74,7 @@ rule adversary_create: // way for the adversary to create shares, even though th
   --[]->
     [ Out(share(members, %n, secret)) ]
 
-rule adversary_insert:
+rule adversary_insert[no_derivcheck]:
     [ In(<purpose, share(share_members, %a, secret)>) ]
   --[]->
     [ !Share('adv', purpose, share(share_members, %a, secret)) ]
@@ -80,7 +84,7 @@ rule adversary_retrieve_complete:
   --[ ]->
     [ Out(secret) ]
 
-rule adversary_retrieve_partial:
+rule adversary_retrieve_partial[no_derivcheck]:
     [ PartialSecret('adv', purpose, share_members, share(share_members, %a, secret)) ]
   --[]->
     [ Out(share(share_members, %a, secret)) ]
@@ -95,9 +99,9 @@ rule client_0: // initialise the client and prepare for communication with serve
     [ Client_0(~pw, ~cid), !Share(~cid, 'koprf', share(members, %n, ~koprf)) ]
 
 rule client_0_send: // TODO: Think about enforcing that client communicates with EVERY server EXACTLY ONCE
-    [ Client_0(~pw, ~cid), PartialSecret(~cid, 'koprf', ~sid, shr), !Server(~sid) ]
+    [ Client_0(~pw, ~cid), PartialSecret(~cid, 'koprf', $sid, shr), !Server($sid) ]
   --[ ]->
-    [ Client_0(~pw, ~cid), Out(<~sid, shr>) ]
+    [ Client_0(~pw, ~cid), Out(<$sid, shr>) ]
 
 rule client_1:
     [ Client_0(~pw, ~cid) ]
