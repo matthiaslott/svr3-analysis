@@ -1,0 +1,42 @@
+theory Threshold_bilinear
+
+begin
+
+builtins: bilinear-pairing, diffie-hellman
+
+rule toprf_build:
+    let
+        koprf = ~koprf1 * ~koprf2 * ~koprf3
+        //kauth = h(<x, pmult(koprf, h(x))>) would be the full truth. Not modelled here for simplicity. See below for kauth = pmult(koprf, x)
+        part1 = pmult(~koprf1, ~x)
+        part2 = pmult(~koprf2, ~x)
+        part3 = pmult(~koprf3, ~x)
+
+        // THIS WORKS:
+        //kauth = em(part1, em(part2, part3))
+
+        // THIS DOESN't WORK: WHY?
+        kauth = pmult(koprf, em(~x, em(~x, ~x)))
+    in
+    [ Fr(~x), Fr(~koprf1), Fr(~koprf2), Fr(~koprf3) ]
+  --[ CorrectResult(kauth) ]->
+    [ Out(<part1>), Out(<part2>), Out(<part3>) ]
+
+rule toprf_reconstruct: // receive shares and recombine them
+    [ In(part1), In(part2), In(part3) ]
+  --[
+      TestResult(em(em(part1, part3), part2)) // Reconstruction in a different format on purpose
+    ]->
+    [ ]
+
+
+lemma executable2: // works
+    exists-trace "Ex kauth #i. CorrectResult(kauth)@#i"
+
+lemma executable3: // works or fails depending on kauth
+    exists-trace "Ex kauth #i #j. CorrectResult(kauth)@#i & K(kauth)@#j"
+
+lemma executable4: // works or fails depending on kauth
+    exists-trace "Ex kauth #i #j. CorrectResult(kauth)@#i & TestResult(kauth)@#j"
+
+end
