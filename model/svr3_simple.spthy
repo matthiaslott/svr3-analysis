@@ -1,0 +1,275 @@
+theory SVR3_Simple
+
+// Models a simpler underapproximation of the SVR3 protocol:
+// - No key rotation is modelled
+// - No Noise.ExportedAuthenticator
+// - TOPRF has neither password hash nor key shares blinded
+// - Signature instead of ZKP
+// - Client cannot execute reconstruction phase more than once
+// - Client reuses sid from registration phase
+//   Justification: In the "real world", client needs to remember the sids to avoid sending signatures to the wrong servers.
+//   In the real world, this is "public" information?
+
+// Neglects certain adversary capabilities:
+// - brute force attack of password (and thus the secret) might be possible, simply by compromising one server and comparing against h(pw). But this isn't modelled
+
+// Adversray capabilities:
+// - Server compromise: Observe all the secrets that were stored on the server as well as send/receive messages on its behalf
+// - Access to client identifiers due to compromise of authentication server
+// - Access to Quantum Computer that solves DLOG.
+
+
+// Issues/Todos:
+// - PQ behaviour of adversary
+// - executability lemmas
+// - secrecy lemmas, ...
+
+
+begin
+
+builtins: xor, hashing, symmetric-encryption, signing
+
+predicates:
+    DISTINCT(x, y, z) <=> not (x = y | x = z | y = z)
+
+functions:
+    // PRF: modelled explicitly instead of h(pw||[koprf]h(pw)) because it would require a function anyway for [koprf]h(pw)
+    // the relevant property is given: can only be evaluated if pw and koprf are known. Knowing koprf is equivalent to having enough of its shares.
+    PRF/2, 
+    KDF/2,
+
+// provides: SCClientOut, SCClientIn, SCServerOut, SCServerIn
+// uses: !Server, !Compromised
+#include "src/securechannel.spthy"
+
+// create environment
+// Exactly 3 valid servers
+/*rule create_servers:
+    []
+  --[
+      OnlyOnce('setup_environment')
+    , _restrict(DISTINCT($sid1, $sid2, $sid3))
+    ]->
+    [ !Server($sid1), !Server($sid2), !Server($sid3) ]
+*/
+
+rule create_server:
+    []--[]->[ !Server($sid) ]
+
+
+// adversary capabilities
+rule compromise_server:
+    [ !Server($sid) ]
+  --[
+      AdversaryAction()
+    , Compromise($sid)
+    ]->
+    [ !Compromised($sid) ]
+
+// Obtain secrets of compromised servers
+// This rule isn't needed because servers start out without any knowledge. The adversary can learn those values by reading what was sent over the channel.
+/*
+rule read_state:
+    [ !Compromised($sid), !State($sid, value) ]
+  --[ AdversaryAction() ]->
+    [ Out(value) ]
+*/
+
+
+// Protocol
+// Initialisation of the client with password and secret to be protected.
+// Each client can only store 1 secret.
+rule client_0:
+    [ Fr(~pw), Fr(~secret) ]
+  --[ OnlyOnce(<'client_initialise', $cid>) ]->
+    [ Client_0($cid, ~pw, ~secret) ]
+
+// Client Registration    
+rule client_1:
+    let
+        koprf = ~koprf1 XOR ~koprf2 XOR ~koprf3
+        s_enc = ~s_enc1 XOR ~s_enc2 XOR ~s_enc3
+        kauth = PRF(koprf, ~pw) // not modelled using hash functions (see definition of PRF for reason)
+        kenc = KDF(s_enc, kauth)
+        ksign1 = KDF(kauth, '1')
+        ksign2 = KDF(kauth, '2')
+        ksign3 = KDF(kauth, '3')
+        kvfy1 = pk(ksign1)
+        kvfy2 = pk(ksign2)
+        kvfy3 = pk(ksign3)
+        // why not AEAD: AEAD doesn't make the adversary weaker because he can still derive the same messages.
+        // In a sense, the adversary works together with Tamarin and may try infinitely many keys. Tamarin will be telling us if the adversary "won".
+        // Furthermore, this only weakens the client, as he doesn't work with Tamarin and no longer knows if decryption was successful.
+        encrypted_secret = senc(~secret, kenc)  
+    in
+    [
+      Client_0($cid, ~pw, ~secret)
+    , Fr(~koprf1), Fr(~koprf2), Fr(~koprf3)
+    , Fr(~s_enc1), Fr(~s_enc2), Fr(~s_enc3)
+    , !Server($sid1), !Server($sid2), !Server($sid3)
+    , Fr(~sessId1), Fr(~sessId2), Fr(~sessId3)
+    ]
+  --[
+      _restrict(DISTINCT($sid1, $sid2, $sid3))
+    , ClientInitialise($cid, ~pw, ~secret)
+    ]->
+    [ 
+      Out(encrypted_secret) // Q: should this be annotated with $cid? IMO not needed as long as we don't strive for success guarantees
+    , SCClientOut(~sessId1, $sid1, <$cid, ~koprf1, ~s_enc1, kvfy1>)
+    , SCClientOut(~sessId2, $sid2, <$cid, ~koprf2, ~s_enc2, kvfy2>)
+    , SCClientOut(~sessId3, $sid3, <$cid, ~koprf3, ~s_enc3, kvfy3>)
+    , Client_1($cid, ~pw, $sid1, $sid2, $sid3) // forget the secret
+    ]
+
+// server registration
+rule server_1:
+    [
+      !Server($sid)
+    , SCServerIn(~sessId, $sid, <$cid, koprf_share, s_enc_share, kvfy>)
+    ]
+  --[
+      //ServerInitialise($sid, $cid, koprf_share, s_enc_share, kvfy)
+    ]->
+    [
+    //  !State($sid, koprf_share)
+    //, !State($sid, s_enc_share)
+    //, !State($sid, kvfy)
+    //,
+      !Server_1($sid, $cid, koprf_share, s_enc_share, kvfy)
+    ]
+
+
+
+// Client Reconstruction
+rule client_2:
+    [
+      Client_1($cid, ~pw, $sid1, $sid2, $sid3)
+    , Fr(~sessId1), Fr(~sessId2), Fr(~sessId3)
+    ]
+  --[
+      ClientReconstructStart($cid, ~pw)
+    ]->
+    [ 
+      SCClientOut(~sessId1, $sid1, <$cid, h(~pw)>)
+    , SCClientOut(~sessId2, $sid2, <$cid, h(~pw)>)
+    , SCClientOut(~sessId3, $sid3, <$cid, h(~pw)>)
+    , Client_2($cid, ~pw, <$sid1, ~sessId1>, <$sid2, ~sessId2>, <$sid3, ~sessId3>)
+    ]
+
+    
+rule server_2:
+    [
+      !Server_1($sid, $cid, koprf_share, s_enc_share, kvfy)
+    , SCServerIn(~sessId, $sid, <$cid, hpw>)
+    ]
+  --[
+      // OnlyOnce(<'server', $sid>) // TODO: Remove
+    ]->
+    [
+    //!State($sid, hpw)
+    //,
+      SCServerOut(~sessId, $sid, koprf_share)
+    , Server_2($sid, $cid, s_enc_share, kvfy, hpw, ~sessId)
+    ]
+
+
+
+rule client_3:
+    let
+        koprf = koprf1 XOR koprf2 XOR koprf3
+        kauth = PRF(koprf, ~pw)
+        ksign1 = KDF(kauth, '1')
+        ksign2 = KDF(kauth, '2')
+        ksign3 = KDF(kauth, '3')
+        c = h(h(~pw)) // Q: Think about how to model Noise.ExportedAuthenticator and if it even needs to be modelled!
+        sig1 = sign(c, ksign1)
+        sig2 = sign(c, ksign2)
+        sig3 = sign(c, ksign3)
+    in 
+    [
+      Client_2($cid, ~pw, <$sid1, ~sessId1>, <$sid2, ~sessId2>, <$sid3, ~sessId3>)
+    , SCClientIn(~sessId1, $sid1, koprf1)
+    , SCClientIn(~sessId2, $sid2, koprf2)
+    , SCClientIn(~sessId3, $sid3, koprf3)
+    ]
+  --[
+      ClientReconstructionMiddle($cid, ~pw)
+    ]->
+    [
+      SCClientOut(~sessId1, $sid1, sig1)
+    , SCClientOut(~sessId2, $sid2, sig2)
+    , SCClientOut(~sessId3, $sid3, sig3)
+    , Client_3($cid, ~pw, kauth, <$sid1, ~sessId1>, <$sid2, ~sessId2>, <$sid3, ~sessId3>)
+    ]
+    
+rule server_3:
+    let
+        c = h(hpw) // Change if Noise.ExportedAuthenticator is modelled!
+    in
+    [
+      Server_2($sid, $cid, s_enc_share, kvfy, hpw, ~sessId)
+    , SCServerIn(~sessId, $sid, sig)
+    ]
+  --[
+      _restrict(verify(sig, c, kvfy) = true)
+    ]->
+    [
+    //!State($sid, sig)
+    //, 
+      SCServerOut(~sessId, $sid, s_enc_share)
+    ]
+
+
+rule client_4:
+    let
+        s_enc = s_enc1 XOR s_enc2 XOR s_enc3
+        kenc = KDF(s_enc, kauth)
+        secret = sdec(encrypted_secret, kenc)
+    in
+    [
+      Client_3($cid, ~pw, kauth, <$sid1, ~sessId1>, <$sid2, ~sessId2>, <$sid3, ~sessId3>)
+    , SCClientIn(~sessId1, $sid1, s_enc1)
+    , SCClientIn(~sessId2, $sid2, s_enc2)
+    , SCClientIn(~sessId3, $sid3, s_enc3)
+    , In(encrypted_secret)
+    ]
+  --[
+      ClientReconstructFinish($cid, ~pw, secret)
+    ]->
+    []
+
+
+restriction OnlyOnce:
+    "All #i #j v. OnlyOnce(v)@#i & OnlyOnce(v)@#j ==> #i = #j"
+
+lemma executability:
+    exists-trace "
+      not (Ex #i. AdversaryAction()@#i)
+      &
+      Ex cid pw secret #i #j #k #l.
+      ( ClientInitialise(cid, pw, secret)@#i 
+      & ClientReconstructStart(cid, pw)@#j
+      & ClientReconstructionMiddle(cid, pw)@#k
+      & ClientReconstructFinish(cid, pw, secret)@#l
+      )
+    "
+
+
+/*lemma executability:
+    exists-trace "
+    not (Ex sid #i. Compromise(sid)@#i)
+      & Ex cid pw secret koprf s_enc kauth kenc ksign1 ksign2 ksign3 kvfy1 kvfy2 kvfy3 #i.
+        Ex sid1 koprf1 s_enc1 sid2 koprf2 s_enc2 sid3 koprf3 s_enc3 #j1 #j2 #j3.
+        ( koprf = koprf1 XOR koprf2 XOR koprf3
+          & s_enc = s_enc1 XOR s_enc2 XOR s_enc3
+          & ClientInitialise(cid, pw, secret, koprf, s_enc, kauth, kenc, ksign1, ksign2, ksign3, kvfy1, kvfy2, kvfy3)@#i
+          & ServerInitialise(sid1, cid, koprf1, s_enc1, kvfy1)@#j1
+          & ServerInitialise(sid2, cid, koprf2, s_enc2, kvfy2)@#j2
+          & ServerInitialise(sid3, cid, koprf3, s_enc3, kvfy3)@#j3
+          & not (sid1 = sid2 | sid1 = sid3 | sid2 = sid3)
+        )
+        "
+*/
+
+
+end

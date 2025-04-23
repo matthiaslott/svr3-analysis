@@ -1,0 +1,72 @@
+// Secure Channel:
+// - It is not modelled symmetrically. The servers can be authenticated because they run inside a TEE that can be validated.
+//   Clients cannot be authenticated and are thus only represented by a session id.
+// - The adversary can act on behalf of a compromised server.
+// - The adversary can act on behalf of a user (e.g. inside attacker that has access to authentication server)
+// TODO: Consider whether the adversary may replay messages
+
+// ClientOut -> !ClientKnows -> ServerIn
+// ClientIn <- !ServerKnows <- ServerOut
+
+// Client -> Server
+rule client_out[color=#FFFFFF]:
+    [ SCClientOut(~sessId, $server, msg) ]
+  --[]->
+    [ !SCClientKnows(~sessId, $server, msg) ]
+
+rule server_in[color=#FFFFFF]:
+    [ !SCClientKnows(~sessId, $server, msg) ]
+  --[]->
+    [ SCServerIn(~sessId, $server, msg) ]
+
+// Server -> Client
+rule server_out[color=#FFFFFF]:
+    [ SCServerOut(~sessId, $server, msg) ]
+  --[]->
+    [ !SCServerKnows(~sessId, $server, msg) ]
+
+rule client_in[color=#FFFFFF]:
+    [ !SCServerKnows(~sessId, $server, msg) ]
+  --[]->
+    [ SCClientIn(~sessId, $server, msg) ]
+
+
+// Knowledge of what was transferred over the channel
+rule client_knows[color=#FFFFFF]:
+    [ !SCClientKnows(~sessId, $server, msg) ]
+  --[]->
+    [ !SCKnows(~sessId, $server, msg) ]
+
+rule server_knows[color=#FFFFFF]:
+    [ !SCServerKnows(~sessId, $server, msg) ]
+  --[]->
+    [ !SCKnows(~sessId, $server, msg) ]
+
+
+// Adversary Compromise
+
+// A secure channel with a compromised server: The adversary can read all the messages that the server sent/received.
+rule eavesdrop_server:
+    [ !SCKnows(~sessId, $server, msg), !Compromised($server) ]
+  --[ AdversaryAction() ]->
+    [ Out(~sessId), Out(msg) ]
+
+// A secure channel with a compromised server: The adversary can send arbitrary messages in the name of the server.
+// The session id can be obtained using the eavesdrop_server rule above.
+rule impersonate_server:
+    [ In(~sessId), In(msg), !Compromised($server) ]
+  --[ AdversaryAction() ]->
+    [ SCServerOut(~sessId, $server, msg) ]
+
+
+// A secure channel with a compromised session id: The adversary can read all the messages that the session id sent/received
+rule eavesdrop_client:
+    [ !SCKnows(~sessId, $server, msg), In(~sessId) ]
+  --[ AdversaryAction() ]->
+    [ Out(~sessId), Out(msg) ]
+
+// A secure channel with a compromised session id: The adversary can send arbitrary messages in the name of the client.
+rule impersonate_client:
+    [ In(~sessId), In(msg), !Server($server) ]
+  --[ AdversaryAction() ]->
+    [ SCClientOut(~sessId, $server, msg) ]

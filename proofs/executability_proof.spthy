@@ -1,0 +1,2586 @@
+theory SVR3_Simple begin
+
+// Function signature and definition of the equational theory E
+
+builtins: xor
+functions: KDF/2, PRF/2, fst/1, h/1, pair/2, pk/1, sdec/2, senc/2,
+           sign/2, snd/1, true/0, verify/3
+equations:
+    fst(<x.1, x.2>) = x.1,
+    sdec(senc(x.1, x.2), x.2) = x.1,
+    snd(<x.1, x.2>) = x.2,
+    verify(sign(x.1, x.2), x.1, pk(x.2)) = true
+
+
+
+
+
+
+
+
+
+
+
+
+
+predicate: DISTINCT( x, y, z )<=>¬(((x = y) ∨ (x = z)) ∨ (y = z))
+
+rule (modulo E) client_out[color=#ffffff]:
+   [ SCClientOut( ~sessId, $server, msg ) ]
+  -->
+   [ !SCClientKnows( ~sessId, $server, msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) server_in[color=#ffffff]:
+   [ !SCClientKnows( ~sessId, $server, msg ) ]
+  -->
+   [ SCServerIn( ~sessId, $server, msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) server_out[color=#ffffff]:
+   [ SCServerOut( ~sessId, $server, msg ) ]
+  -->
+   [ !SCServerKnows( ~sessId, $server, msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) client_in[color=#ffffff]:
+   [ !SCServerKnows( ~sessId, $server, msg ) ]
+  -->
+   [ SCClientIn( ~sessId, $server, msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) client_knows[color=#ffffff]:
+   [ !SCClientKnows( ~sessId, $server, msg ) ]
+  -->
+   [ !SCKnows( ~sessId, $server, msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) server_knows[color=#ffffff]:
+   [ !SCServerKnows( ~sessId, $server, msg ) ]
+  -->
+   [ !SCKnows( ~sessId, $server, msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) eavesdrop_server:
+   [ !SCKnows( ~sessId, $server, msg ), !Compromised( $server ) ]
+  --[ AdversaryAction( ) ]->
+   [ Out( ~sessId ), Out( msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) impersonate_server:
+   [ In( ~sessId ), In( msg ), !Compromised( $server ) ]
+  --[ AdversaryAction( ) ]->
+   [ SCServerOut( ~sessId, $server, msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) eavesdrop_client:
+   [ !SCKnows( ~sessId, $server, msg ), In( ~sessId ) ]
+  --[ AdversaryAction( ) ]->
+   [ Out( ~sessId ), Out( msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) impersonate_client:
+   [ In( ~sessId ), In( msg ), !Server( $server ) ]
+  --[ AdversaryAction( ) ]->
+   [ SCClientOut( ~sessId, $server, msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) create_server:
+   [ ] --> [ !Server( $sid ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) compromise_server:
+   [ !Server( $sid ) ]
+  --[ AdversaryAction( ), Compromise( $sid ) ]->
+   [ !Compromised( $sid ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) client_0:
+   [ Fr( ~pw ), Fr( ~secret ) ]
+  --[ OnlyOnce( <'client_initialise', $cid> ) ]->
+   [ Client_0( $cid, ~pw, ~secret ) ]
+
+  /* has exactly the trivial AC variant */
+
+restriction Restr_client_1_1:
+  "∀ x #NOW x.1 x.2 x.3 x.4 x.5.
+    (Restr_client_1_1( x, x.1, x.2, x.3, x.4, x.5 ) @ #NOW) ⇒
+    (¬(((x = x.1) ∨ (x.2 = x.3)) ∨ (x.4 = x.5)))"
+  // safety formula
+
+rule (modulo E) client_1:
+   [
+   Client_0( $cid, ~pw, ~secret ), Fr( ~koprf1 ), Fr( ~koprf2 ),
+   Fr( ~koprf3 ), Fr( ~s_enc1 ), Fr( ~s_enc2 ), Fr( ~s_enc3 ),
+   !Server( $sid1 ), !Server( $sid2 ), !Server( $sid3 ),
+   Fr( ~sessId1 ), Fr( ~sessId2 ), Fr( ~sessId3 )
+   ]
+  --[
+  ClientInitialise( $cid, ~pw, ~secret ),
+  Restr_client_1_1( $sid1, $sid2, $sid1, $sid3, $sid2, $sid3 )
+  ]->
+   [
+   Out( senc(~secret,
+             KDF((~s_enc1⊕~s_enc2⊕~s_enc3),
+                 PRF((~koprf1⊕~koprf2⊕~koprf3), ~pw)))
+   ),
+   SCClientOut( ~sessId1, $sid1,
+                <$cid, ~koprf1, ~s_enc1, 
+                 pk(KDF(PRF((~koprf1⊕~koprf2⊕~koprf3), ~pw), '1'))>
+   ),
+   SCClientOut( ~sessId2, $sid2,
+                <$cid, ~koprf2, ~s_enc2, 
+                 pk(KDF(PRF((~koprf1⊕~koprf2⊕~koprf3), ~pw), '2'))>
+   ),
+   SCClientOut( ~sessId3, $sid3,
+                <$cid, ~koprf3, ~s_enc3, 
+                 pk(KDF(PRF((~koprf1⊕~koprf2⊕~koprf3), ~pw), '3'))>
+   ),
+   Client_1( $cid, ~pw, $sid1, $sid2, $sid3 )
+   ]
+
+  /*
+  rule (modulo AC) client_1:
+     [
+     Client_0( $cid, ~pw, ~secret ), Fr( ~koprf1 ), Fr( ~koprf2 ),
+     Fr( ~koprf3 ), Fr( ~s_enc1 ), Fr( ~s_enc2 ), Fr( ~s_enc3 ),
+     !Server( $sid1 ), !Server( $sid2 ), !Server( $sid3 ),
+     Fr( ~sessId1 ), Fr( ~sessId2 ), Fr( ~sessId3 )
+     ]
+    --[
+    ClientInitialise( $cid, ~pw, ~secret ),
+    Restr_client_1_1( $sid1, $sid2, $sid1, $sid3, $sid2, $sid3 )
+    ]->
+     [
+     Out( senc(~secret, KDF(z, PRF(z.1, ~pw))) ),
+     SCClientOut( ~sessId1, $sid1,
+                  <$cid, ~koprf1, ~s_enc1, pk(KDF(PRF(z.1, ~pw), '1'))>
+     ),
+     SCClientOut( ~sessId2, $sid2,
+                  <$cid, ~koprf2, ~s_enc2, pk(KDF(PRF(z.1, ~pw), '2'))>
+     ),
+     SCClientOut( ~sessId3, $sid3,
+                  <$cid, ~koprf3, ~s_enc3, pk(KDF(PRF(z.1, ~pw), '3'))>
+     ),
+     Client_1( $cid, ~pw, $sid1, $sid2, $sid3 )
+     ]
+    variants (modulo AC)
+     1. ~koprf1
+              = ~koprf1.24
+        ~koprf2
+              = ~koprf1.24
+        ~koprf3
+              = ~koprf3.26
+        ~s_enc1
+              = ~s_enc1.28
+        ~s_enc2
+              = ~s_enc2.29
+        ~s_enc3
+              = ~s_enc1.28
+        z     = ~s_enc2.29
+        z.1   = ~koprf3.26
+    
+     2. ~koprf1
+              = ~koprf1.24
+        ~koprf2
+              = ~koprf1.24
+        ~koprf3
+              = ~koprf3.26
+        ~s_enc1
+              = ~s_enc1.28
+        ~s_enc2
+              = ~s_enc2.29
+        ~s_enc3
+              = ~s_enc2.29
+        z     = ~s_enc1.28
+        z.1   = ~koprf3.26
+    
+     3. ~koprf1
+              = ~koprf1.24
+        ~koprf2
+              = ~koprf2.25
+        ~koprf3
+              = ~koprf1.24
+        ~s_enc1
+              = ~s_enc1.28
+        ~s_enc2
+              = ~s_enc2.29
+        ~s_enc3
+              = ~s_enc1.28
+        z     = ~s_enc2.29
+        z.1   = ~koprf2.25
+    
+     4. ~koprf1
+              = ~koprf1.24
+        ~koprf2
+              = ~koprf2.25
+        ~koprf3
+              = ~koprf1.24
+        ~s_enc1
+              = ~s_enc1.28
+        ~s_enc2
+              = ~s_enc2.29
+        ~s_enc3
+              = ~s_enc2.29
+        z     = ~s_enc1.28
+        z.1   = ~koprf2.25
+    
+     5. ~koprf1
+              = ~koprf1.24
+        ~koprf2
+              = ~koprf2.25
+        ~koprf3
+              = ~koprf2.25
+        ~s_enc1
+              = ~s_enc1.28
+        ~s_enc2
+              = ~s_enc2.29
+        ~s_enc3
+              = ~s_enc1.28
+        z     = ~s_enc2.29
+        z.1   = ~koprf1.24
+    
+     6. ~koprf1
+              = ~koprf1.24
+        ~koprf2
+              = ~koprf2.25
+        ~koprf3
+              = ~koprf2.25
+        ~s_enc1
+              = ~s_enc1.28
+        ~s_enc2
+              = ~s_enc2.29
+        ~s_enc3
+              = ~s_enc2.29
+        z     = ~s_enc1.28
+        z.1   = ~koprf1.24
+    
+     7. ~koprf1
+              = ~koprf1.24
+        ~koprf2
+              = ~koprf2.25
+        ~koprf3
+              = ~koprf3.26
+        ~s_enc1
+              = ~s_enc1.28
+        ~s_enc2
+              = ~s_enc2.29
+        ~s_enc3
+              = ~s_enc1.28
+        z     = ~s_enc2.29
+        z.1   = (~koprf1.24⊕~koprf2.25⊕~koprf3.26)
+    
+     8. ~koprf1
+              = ~koprf1.24
+        ~koprf2
+              = ~koprf2.25
+        ~koprf3
+              = ~koprf3.26
+        ~s_enc1
+              = ~s_enc1.28
+        ~s_enc2
+              = ~s_enc2.29
+        ~s_enc3
+              = ~s_enc2.29
+        z     = ~s_enc1.28
+        z.1   = (~koprf1.24⊕~koprf2.25⊕~koprf3.26)
+    
+     9. ~koprf1
+              = ~koprf1.25
+        ~koprf2
+              = ~koprf1.25
+        ~koprf3
+              = ~koprf3.27
+        ~s_enc1
+              = ~s_enc1.29
+        ~s_enc2
+              = ~s_enc1.29
+        ~s_enc3
+              = ~s_enc3.31
+        z     = ~s_enc3.31
+        z.1   = ~koprf3.27
+    
+    10. ~koprf1
+              = ~koprf1.25
+        ~koprf2
+              = ~koprf1.25
+        ~koprf3
+              = ~koprf3.27
+        ~s_enc1
+              = ~s_enc1.29
+        ~s_enc2
+              = ~s_enc2.30
+        ~s_enc3
+              = ~s_enc3.31
+        z     = (~s_enc1.29⊕~s_enc2.30⊕~s_enc3.31)
+        z.1   = ~koprf3.27
+    
+    11. ~koprf1
+              = ~koprf1.25
+        ~koprf2
+              = ~koprf2.26
+        ~koprf3
+              = ~koprf1.25
+        ~s_enc1
+              = ~s_enc1.29
+        ~s_enc2
+              = ~s_enc1.29
+        ~s_enc3
+              = ~s_enc3.31
+        z     = ~s_enc3.31
+        z.1   = ~koprf2.26
+    
+    12. ~koprf1
+              = ~koprf1.25
+        ~koprf2
+              = ~koprf2.26
+        ~koprf3
+              = ~koprf1.25
+        ~s_enc1
+              = ~s_enc1.29
+        ~s_enc2
+              = ~s_enc2.30
+        ~s_enc3
+              = ~s_enc3.31
+        z     = (~s_enc1.29⊕~s_enc2.30⊕~s_enc3.31)
+        z.1   = ~koprf2.26
+    
+    13. ~koprf1
+              = ~koprf1.25
+        ~koprf2
+              = ~koprf2.26
+        ~koprf3
+              = ~koprf2.26
+        ~s_enc1
+              = ~s_enc1.29
+        ~s_enc2
+              = ~s_enc1.29
+        ~s_enc3
+              = ~s_enc3.31
+        z     = ~s_enc3.31
+        z.1   = ~koprf1.25
+    
+    14. ~koprf1
+              = ~koprf1.25
+        ~koprf2
+              = ~koprf2.26
+        ~koprf3
+              = ~koprf2.26
+        ~s_enc1
+              = ~s_enc1.29
+        ~s_enc2
+              = ~s_enc2.30
+        ~s_enc3
+              = ~s_enc3.31
+        z     = (~s_enc1.29⊕~s_enc2.30⊕~s_enc3.31)
+        z.1   = ~koprf1.25
+    
+    15. ~koprf1
+              = ~koprf1.25
+        ~koprf2
+              = ~koprf2.26
+        ~koprf3
+              = ~koprf3.27
+        ~s_enc1
+              = ~s_enc1.29
+        ~s_enc2
+              = ~s_enc1.29
+        ~s_enc3
+              = ~s_enc3.31
+        z     = ~s_enc3.31
+        z.1   = (~koprf1.25⊕~koprf2.26⊕~koprf3.27)
+    
+    16. ~koprf1
+              = ~koprf1.25
+        ~koprf2
+              = ~koprf2.26
+        ~koprf3
+              = ~koprf3.27
+        ~s_enc1
+              = ~s_enc1.29
+        ~s_enc2
+              = ~s_enc2.30
+        ~s_enc3
+              = ~s_enc3.31
+        z     = (~s_enc1.29⊕~s_enc2.30⊕~s_enc3.31)
+        z.1   = (~koprf1.25⊕~koprf2.26⊕~koprf3.27)
+  */
+
+rule (modulo E) server_1:
+   [
+   !Server( $sid ),
+   SCServerIn( ~sessId, $sid, <$cid, koprf_share, s_enc_share, kvfy> )
+   ]
+  -->
+   [ !Server_1( $sid, $cid, koprf_share, s_enc_share, kvfy ) ]
+
+  // loop breaker: [1]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) client_2:
+   [
+   Client_1( $cid, ~pw, $sid1, $sid2, $sid3 ), Fr( ~sessId1 ),
+   Fr( ~sessId2 ), Fr( ~sessId3 )
+   ]
+  --[ ClientReconstructStart( $cid, ~pw ) ]->
+   [
+   SCClientOut( ~sessId1, $sid1, <$cid, h(~pw)> ),
+   SCClientOut( ~sessId2, $sid2, <$cid, h(~pw)> ),
+   SCClientOut( ~sessId3, $sid3, <$cid, h(~pw)> ),
+   Client_2( $cid, ~pw, <$sid1, ~sessId1>, <$sid2, ~sessId2>,
+             <$sid3, ~sessId3>
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) server_2:
+   [
+   !Server_1( $sid, $cid, koprf_share, s_enc_share, kvfy ),
+   SCServerIn( ~sessId, $sid, <$cid, hpw> )
+   ]
+  -->
+   [
+   SCServerOut( ~sessId, $sid, koprf_share ),
+   Server_2( $sid, $cid, s_enc_share, kvfy, hpw, ~sessId )
+   ]
+
+  // loop breaker: [1]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) client_3:
+   [
+   Client_2( $cid, ~pw, <$sid1, ~sessId1>, <$sid2, ~sessId2>,
+             <$sid3, ~sessId3>
+   ),
+   SCClientIn( ~sessId1, $sid1, koprf1 ),
+   SCClientIn( ~sessId2, $sid2, koprf2 ),
+   SCClientIn( ~sessId3, $sid3, koprf3 )
+   ]
+  --[ ClientReconstructionMiddle( $cid, ~pw ) ]->
+   [
+   SCClientOut( ~sessId1, $sid1,
+                sign(h(h(~pw)), KDF(PRF((koprf1⊕koprf2⊕koprf3), ~pw), '1'))
+   ),
+   SCClientOut( ~sessId2, $sid2,
+                sign(h(h(~pw)), KDF(PRF((koprf1⊕koprf2⊕koprf3), ~pw), '2'))
+   ),
+   SCClientOut( ~sessId3, $sid3,
+                sign(h(h(~pw)), KDF(PRF((koprf1⊕koprf2⊕koprf3), ~pw), '3'))
+   ),
+   Client_3( $cid, ~pw, PRF((koprf1⊕koprf2⊕koprf3), ~pw),
+             <$sid1, ~sessId1>, <$sid2, ~sessId2>, <$sid3, ~sessId3>
+   )
+   ]
+
+  /*
+  rule (modulo AC) client_3:
+     [
+     Client_2( $cid, ~pw, <$sid1, ~sessId1>, <$sid2, ~sessId2>,
+               <$sid3, ~sessId3>
+     ),
+     SCClientIn( ~sessId1, $sid1, koprf1 ),
+     SCClientIn( ~sessId2, $sid2, koprf2 ),
+     SCClientIn( ~sessId3, $sid3, koprf3 )
+     ]
+    --[ ClientReconstructionMiddle( $cid, ~pw ) ]->
+     [
+     SCClientOut( ~sessId1, $sid1,
+                  sign(h(h(~pw)), KDF(PRF(z, ~pw), '1'))
+     ),
+     SCClientOut( ~sessId2, $sid2,
+                  sign(h(h(~pw)), KDF(PRF(z, ~pw), '2'))
+     ),
+     SCClientOut( ~sessId3, $sid3,
+                  sign(h(h(~pw)), KDF(PRF(z, ~pw), '3'))
+     ),
+     Client_3( $cid, ~pw, PRF(z, ~pw), <$sid1, ~sessId1>,
+               <$sid2, ~sessId2>, <$sid3, ~sessId3>
+     )
+     ]
+    variants (modulo AC)
+     1. koprf1
+              = koprf1.15
+        koprf2
+              = koprf2.16
+        koprf3
+              = koprf1.15
+        z     = koprf2.16
+    
+     2. koprf1
+              = koprf1.15
+        koprf2
+              = koprf2.16
+        koprf3
+              = koprf2.16
+        z     = koprf1.15
+    
+     3. koprf1
+              = koprf1.15
+        koprf2
+              = koprf2.16
+        koprf3
+              = zero
+        z     = (koprf1.15⊕koprf2.16)
+    
+     4. koprf1
+              = koprf1.15
+        koprf2
+              = koprf2.16
+        koprf3
+              = (koprf1.15⊕koprf2.16)
+        z     = zero
+    
+     5. koprf1
+              = koprf1.16
+        koprf2
+              = koprf1.16
+        koprf3
+              = koprf3.18
+        z     = koprf3.18
+    
+     6. koprf1
+              = koprf1.16
+        koprf2
+              = koprf2.17
+        koprf3
+              = koprf3.18
+        z     = (koprf1.16⊕koprf2.17⊕koprf3.18)
+    
+     7. koprf1
+              = koprf1.16
+        koprf2
+              = zero
+        koprf3
+              = koprf3.18
+        z     = (koprf1.16⊕koprf3.18)
+    
+     8. koprf1
+              = koprf1.16
+        koprf2
+              = (koprf1.16⊕koprf3.18)
+        koprf3
+              = koprf3.18
+        z     = zero
+    
+     9. koprf1
+              = koprf1.17
+        koprf2
+              = koprf2.18
+        koprf3
+              = (koprf1.17⊕koprf2.18⊕z.20)
+        z     = z.20
+    
+    10. koprf1
+              = koprf1.17
+        koprf2
+              = zero
+        koprf3
+              = (koprf1.17⊕z.20)
+        z     = z.20
+    
+    11. koprf1
+              = koprf1.17
+        koprf2
+              = (koprf1.17⊕koprf3.19⊕z.20)
+        koprf3
+              = koprf3.19
+        z     = z.20
+    
+    12. koprf1
+              = koprf1.17
+        koprf2
+              = (koprf1.17⊕z.20)
+        koprf3
+              = zero
+        z     = z.20
+    
+    13. koprf1
+              = koprf1.29
+        koprf2
+              = koprf2.30
+        koprf3
+              = (koprf2.30⊕x.48)
+        z     = (koprf1.29⊕x.48)
+    
+    14. koprf1
+              = koprf1.29
+        koprf2
+              = (koprf1.29⊕x.48)
+        koprf3
+              = koprf3.31
+        z     = (koprf3.31⊕x.48)
+    
+    15. koprf1
+              = koprf1.29
+        koprf2
+              = (koprf1.29⊕x.48)
+        koprf3
+              = (z.32⊕x.48)
+        z     = z.32
+    
+    16. koprf1
+              = koprf1.29
+        koprf2
+              = (koprf3.31⊕x.48)
+        koprf3
+              = koprf3.31
+        z     = (koprf1.29⊕x.48)
+    
+    17. koprf1
+              = koprf1.29
+        koprf2
+              = (z.32⊕x.48)
+        koprf3
+              = (koprf1.29⊕x.48)
+        z     = z.32
+    
+    18. koprf1
+              = koprf1.30
+        koprf2
+              = koprf2.31
+        koprf3
+              = (koprf1.30⊕x.50)
+        z     = (koprf2.31⊕x.50)
+    
+    19. koprf1
+              = koprf1.30
+        koprf2
+              = (x.48⊕x.49)
+        koprf3
+              = (x.48⊕x.50)
+        z     = (koprf1.30⊕x.49⊕x.50)
+    
+    20. koprf1
+              = koprf1.31
+        koprf2
+              = (koprf1.31⊕x.50⊕x.51)
+        koprf3
+              = (x.50⊕x.52)
+        z     = (x.51⊕x.52)
+    
+    21. koprf1
+              = koprf1.31
+        koprf2
+              = (x.50⊕x.51)
+        koprf3
+              = (koprf1.31⊕x.50⊕x.52)
+        z     = (x.51⊕x.52)
+    
+    22. koprf1
+              = zero
+        koprf2
+              = koprf2.15
+        koprf3
+              = koprf3.16
+        z     = (koprf2.15⊕koprf3.16)
+    
+    23. koprf1
+              = zero
+        koprf2
+              = koprf2.16
+        koprf3
+              = (koprf2.16⊕z.18)
+        z     = z.18
+    
+    24. koprf1
+              = zero
+        koprf2
+              = (koprf3.15⊕z.16)
+        koprf3
+              = koprf3.15
+        z     = z.16
+    
+    25. koprf1
+              = zero
+        koprf2
+              = (x.16⊕x.17)
+        koprf3
+              = (x.16⊕x.18)
+        z     = (x.17⊕x.18)
+    
+    26. koprf1
+              = (koprf2.15⊕koprf3.16)
+        koprf2
+              = koprf2.15
+        koprf3
+              = koprf3.16
+        z     = zero
+    
+    27. koprf1
+              = (koprf3.15⊕z.16)
+        koprf2
+              = zero
+        koprf3
+              = koprf3.15
+        z     = z.16
+    
+    28. koprf1
+              = (koprf2.16⊕koprf3.17⊕z.18)
+        koprf2
+              = koprf2.16
+        koprf3
+              = koprf3.17
+        z     = z.18
+    
+    29. koprf1
+              = (koprf2.16⊕z.18)
+        koprf2
+              = koprf2.16
+        koprf3
+              = zero
+        z     = z.18
+    
+    30. koprf1
+              = (x.16⊕x.17)
+        koprf2
+              = zero
+        koprf3
+              = (x.16⊕x.18)
+        z     = (x.17⊕x.18)
+    
+    31. koprf1
+              = (x.16⊕x.17)
+        koprf2
+              = (x.16⊕x.18)
+        koprf3
+              = zero
+        z     = (x.17⊕x.18)
+    
+    32. koprf1
+              = (x.16⊕x.17)
+        koprf2
+              = (x.16⊕x.18)
+        koprf3
+              = (x.17⊕x.18)
+        z     = zero
+    
+    33. koprf1
+              = (x.17⊕x.18)
+        koprf2
+              = (x.17⊕x.19)
+        koprf3
+              = (x.18⊕x.20)
+        z     = (x.19⊕x.20)
+    
+    34. koprf1
+              = (x.17⊕x.18)
+        koprf2
+              = (x.17⊕x.19)
+        koprf3
+              = (x.19⊕x.20)
+        z     = (x.18⊕x.20)
+    
+    35. koprf1
+              = (x.17⊕x.18)
+        koprf2
+              = (x.19⊕x.20)
+        koprf3
+              = (x.17⊕x.19)
+        z     = (x.18⊕x.20)
+    
+    36. koprf1
+              = (x.18⊕x.19)
+        koprf2
+              = (x.18⊕x.20⊕x.21)
+        koprf3
+              = (x.19⊕x.20⊕x.22)
+        z     = (x.21⊕x.22)
+    
+    37. koprf1
+              = (x.18⊕x.19)
+        koprf2
+              = (x.18⊕x.20⊕x.21)
+        koprf3
+              = (x.20⊕x.22)
+        z     = (x.19⊕x.21⊕x.22)
+    
+    38. koprf1
+              = (x.18⊕x.19)
+        koprf2
+              = (x.20⊕x.21)
+        koprf3
+              = (x.18⊕x.20⊕x.22)
+        z     = (x.19⊕x.21⊕x.22)
+    
+    39. koprf1
+              = (x.18⊕x.19⊕x.20)
+        koprf2
+              = (x.18⊕x.21)
+        koprf3
+              = (x.19⊕x.21⊕x.22)
+        z     = (x.20⊕x.22)
+    
+    40. koprf1
+              = (x.18⊕x.19⊕x.20)
+        koprf2
+              = (x.18⊕x.21)
+        koprf3
+              = (x.19⊕x.22)
+        z     = (x.20⊕x.21⊕x.22)
+    
+    41. koprf1
+              = (x.18⊕x.19⊕x.20)
+        koprf2
+              = (x.18⊕x.21⊕x.22)
+        koprf3
+              = (x.19⊕x.21)
+        z     = (x.20⊕x.22)
+    
+    42. koprf1
+              = (x.19⊕x.20⊕x.21)
+        koprf2
+              = (x.19⊕x.22⊕x.23)
+        koprf3
+              = (x.20⊕x.22⊕x.24)
+        z     = (x.21⊕x.23⊕x.24)
+    
+    43. koprf1
+              = (koprf3.24⊕x.36)
+        koprf2
+              = (z.25⊕x.36)
+        koprf3
+              = koprf3.24
+        z     = z.25
+    
+    44. koprf1
+              = (z.25⊕x.34⊕x.35)
+        koprf2
+              = (x.34⊕x.37)
+        koprf3
+              = (x.35⊕x.37)
+        z     = z.25
+    
+    45. koprf1
+              = (z.25⊕x.36)
+        koprf2
+              = (koprf3.24⊕x.36)
+        koprf3
+              = koprf3.24
+        z     = z.25
+    
+    46. koprf1
+              = (koprf2.27⊕x.43)
+        koprf2
+              = koprf2.27
+        koprf3
+              = koprf3.28
+        z     = (koprf3.28⊕x.43)
+    
+    47. koprf1
+              = (koprf2.27⊕x.43)
+        koprf2
+              = koprf2.27
+        koprf3
+              = (z.29⊕x.43)
+        z     = z.29
+    
+    48. koprf1
+              = (koprf3.27⊕x.39⊕x.41)
+        koprf2
+              = (x.39⊕x.42)
+        koprf3
+              = koprf3.27
+        z     = (x.41⊕x.42)
+    
+    49. koprf1
+              = (koprf3.28⊕x.43)
+        koprf2
+              = koprf2.27
+        koprf3
+              = koprf3.28
+        z     = (koprf2.27⊕x.43)
+    
+    50. koprf1
+              = (z.28⊕x.41)
+        koprf2
+              = koprf2.26
+        koprf3
+              = (koprf2.26⊕x.41)
+        z     = z.28
+    
+    51. koprf1
+              = (koprf2.29⊕x.45⊕x.46)
+        koprf2
+              = koprf2.29
+        koprf3
+              = (x.45⊕x.47)
+        z     = (x.46⊕x.47)
+    
+    52. koprf1
+              = (x.33⊕x.34)
+        koprf2
+              = (z.24⊕x.33⊕x.35)
+        koprf3
+              = (x.34⊕x.35)
+        z     = z.24
+    
+    53. koprf1
+              = (x.33⊕x.34)
+        koprf2
+              = (x.33⊕x.35)
+        koprf3
+              = (z.24⊕x.34⊕x.35)
+        z     = z.24
+    
+    54. koprf1
+              = (x.38⊕x.39)
+        koprf2
+              = (x.38⊕x.40)
+        koprf3
+              = koprf3.26
+        z     = (koprf3.26⊕x.39⊕x.40)
+    
+    55. koprf1
+              = (x.39⊕x.40)
+        koprf2
+              = (koprf3.27⊕x.39⊕x.42)
+        koprf3
+              = koprf3.27
+        z     = (x.40⊕x.42)
+    
+    56. koprf1
+              = (x.44⊕x.45)
+        koprf2
+              = koprf2.29
+        koprf3
+              = (koprf2.29⊕x.44⊕x.47)
+        z     = (x.45⊕x.47)
+    
+    57. koprf1
+              = (x.44⊕x.45)
+        koprf2
+              = koprf2.29
+        koprf3
+              = (x.44⊕x.47)
+        z     = (koprf2.29⊕x.45⊕x.47)
+  */
+
+restriction Restr_server_3_1:
+  "∀ x #NOW. (Restr_server_3_1( x ) @ #NOW) ⇒ (x = true)"
+  // safety formula
+
+rule (modulo E) server_3:
+   [
+   Server_2( $sid, $cid, s_enc_share, kvfy, hpw, ~sessId ),
+   SCServerIn( ~sessId, $sid, sig )
+   ]
+  --[ Restr_server_3_1( verify(sig, h(hpw), kvfy) ) ]->
+   [ SCServerOut( ~sessId, $sid, s_enc_share ) ]
+
+  // loop breaker: [1]
+  /*
+  rule (modulo AC) server_3:
+     [
+     Server_2( $sid, $cid, s_enc_share, kvfy, hpw, ~sessId ),
+     SCServerIn( ~sessId, $sid, sig )
+     ]
+    --[ Restr_server_3_1( z ) ]->
+     [ SCServerOut( ~sessId, $sid, s_enc_share ) ]
+    variants (modulo AC)
+    1. hpw   = hpw.9
+       kvfy  = kvfy.9
+       sig   = sig.9
+       z     = verify(sig.9, h(hpw.9), kvfy.9)
+    
+    2. hpw   = x.9
+       kvfy  = pk(x.10)
+       sig   = sign(h(x.9), x.10)
+       z     = true
+    // loop breaker: [1]
+  */
+
+rule (modulo E) client_4:
+   [
+   Client_3( $cid, ~pw, kauth, <$sid1, ~sessId1>, <$sid2, ~sessId2>,
+             <$sid3, ~sessId3>
+   ),
+   SCClientIn( ~sessId1, $sid1, s_enc1 ),
+   SCClientIn( ~sessId2, $sid2, s_enc2 ),
+   SCClientIn( ~sessId3, $sid3, s_enc3 ), In( encrypted_secret )
+   ]
+  --[
+  ClientReconstructFinish( $cid, ~pw,
+                           sdec(encrypted_secret, KDF((s_enc1⊕s_enc2⊕s_enc3), kauth))
+  )
+  ]->
+   [ ]
+
+  /*
+  rule (modulo AC) client_4:
+     [
+     Client_3( $cid, ~pw, kauth, <$sid1, ~sessId1>, <$sid2, ~sessId2>,
+               <$sid3, ~sessId3>
+     ),
+     SCClientIn( ~sessId1, $sid1, s_enc1 ),
+     SCClientIn( ~sessId2, $sid2, s_enc2 ),
+     SCClientIn( ~sessId3, $sid3, s_enc3 ), In( encrypted_secret )
+     ]
+    --[ ClientReconstructFinish( $cid, ~pw, z ) ]->
+     [ ]
+    variants (modulo AC)
+      1. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = s_enc1.15
+         s_enc2
+               = s_enc2.15
+         s_enc3
+               = s_enc3.15
+         z     = sdec(encrypted_secret.15,
+                      KDF((s_enc1.15⊕s_enc2.15⊕s_enc3.15), kauth.15))
+    
+      2. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = s_enc1.15
+         s_enc2
+               = s_enc2.15
+         s_enc3
+               = zero
+         z     = sdec(encrypted_secret.15,
+                      KDF((s_enc1.15⊕s_enc2.15), kauth.15))
+    
+      3. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = s_enc1.15
+         s_enc2
+               = zero
+         s_enc3
+               = s_enc3.15
+         z     = sdec(encrypted_secret.15,
+                      KDF((s_enc1.15⊕s_enc3.15), kauth.15))
+    
+      4. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = zero
+         s_enc2
+               = s_enc2.15
+         s_enc3
+               = s_enc3.15
+         z     = sdec(encrypted_secret.15,
+                      KDF((s_enc2.15⊕s_enc3.15), kauth.15))
+    
+      5. encrypted_secret
+               = encrypted_secret.16
+         kauth = kauth.16
+         s_enc1
+               = x.15
+         s_enc2
+               = x.15
+         s_enc3
+               = s_enc3.16
+         z     = sdec(encrypted_secret.16, KDF(s_enc3.16, kauth.16))
+    
+      6. encrypted_secret
+               = encrypted_secret.16
+         kauth = kauth.16
+         s_enc1
+               = x.15
+         s_enc2
+               = s_enc2.16
+         s_enc3
+               = x.15
+         z     = sdec(encrypted_secret.16, KDF(s_enc2.16, kauth.16))
+    
+      7. encrypted_secret
+               = encrypted_secret.16
+         kauth = kauth.16
+         s_enc1
+               = s_enc1.16
+         s_enc2
+               = x.15
+         s_enc3
+               = x.15
+         z     = sdec(encrypted_secret.16, KDF(s_enc1.16, kauth.16))
+    
+      8. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = x.15
+         s_enc2
+               = x.16
+         s_enc3
+               = (x.15⊕x.16)
+         z     = sdec(encrypted_secret.17, KDF(zero, kauth.17))
+    
+      9. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = x.15
+         s_enc2
+               = zero
+         s_enc3
+               = (x.15⊕x.16)
+         z     = sdec(encrypted_secret.17, KDF(x.16, kauth.17))
+    
+     10. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = x.15
+         s_enc2
+               = (x.15⊕x.16)
+         s_enc3
+               = x.16
+         z     = sdec(encrypted_secret.17, KDF(zero, kauth.17))
+    
+     11. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = x.15
+         s_enc2
+               = (x.15⊕x.16)
+         s_enc3
+               = s_enc3.17
+         z     = sdec(encrypted_secret.17, KDF((x.16⊕s_enc3.17), kauth.17))
+    
+     12. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = x.15
+         s_enc2
+               = (x.15⊕x.16)
+         s_enc3
+               = zero
+         z     = sdec(encrypted_secret.17, KDF(x.16, kauth.17))
+    
+     13. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = s_enc1.17
+         s_enc2
+               = x.15
+         s_enc3
+               = (x.15⊕x.16)
+         z     = sdec(encrypted_secret.17, KDF((x.16⊕s_enc1.17), kauth.17))
+    
+     14. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = s_enc1.17
+         s_enc2
+               = (x.15⊕x.16)
+         s_enc3
+               = x.15
+         z     = sdec(encrypted_secret.17, KDF((x.16⊕s_enc1.17), kauth.17))
+    
+     15. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = zero
+         s_enc2
+               = x.15
+         s_enc3
+               = (x.15⊕x.16)
+         z     = sdec(encrypted_secret.17, KDF(x.16, kauth.17))
+    
+     16. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = zero
+         s_enc2
+               = (x.15⊕x.16)
+         s_enc3
+               = x.15
+         z     = sdec(encrypted_secret.17, KDF(x.16, kauth.17))
+    
+     17. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = x.15
+         s_enc3
+               = x.16
+         z     = sdec(encrypted_secret.17, KDF(zero, kauth.17))
+    
+     18. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = x.15
+         s_enc3
+               = s_enc3.17
+         z     = sdec(encrypted_secret.17, KDF((x.16⊕s_enc3.17), kauth.17))
+    
+     19. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = x.15
+         s_enc3
+               = zero
+         z     = sdec(encrypted_secret.17, KDF(x.16, kauth.17))
+    
+     20. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = s_enc2.17
+         s_enc3
+               = x.15
+         z     = sdec(encrypted_secret.17, KDF((x.16⊕s_enc2.17), kauth.17))
+    
+     21. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = zero
+         s_enc3
+               = x.15
+         z     = sdec(encrypted_secret.17, KDF(x.16, kauth.17))
+    
+     22. encrypted_secret
+               = encrypted_secret.18
+         kauth = kauth.18
+         s_enc1
+               = x.15
+         s_enc2
+               = x.16
+         s_enc3
+               = (x.15⊕x.16⊕x.17)
+         z     = sdec(encrypted_secret.18, KDF(x.17, kauth.18))
+    
+     23. encrypted_secret
+               = encrypted_secret.18
+         kauth = kauth.18
+         s_enc1
+               = x.15
+         s_enc2
+               = s_enc2.18
+         s_enc3
+               = (x.15⊕x.17)
+         z     = sdec(encrypted_secret.18, KDF((x.17⊕s_enc2.18), kauth.18))
+    
+     24. encrypted_secret
+               = encrypted_secret.18
+         kauth = kauth.18
+         s_enc1
+               = x.15
+         s_enc2
+               = (x.15⊕x.16)
+         s_enc3
+               = (x.16⊕x.17)
+         z     = sdec(encrypted_secret.18, KDF(x.17, kauth.18))
+    
+     25. encrypted_secret
+               = encrypted_secret.18
+         kauth = kauth.18
+         s_enc1
+               = x.15
+         s_enc2
+               = (x.15⊕x.16⊕x.17)
+         s_enc3
+               = x.16
+         z     = sdec(encrypted_secret.18, KDF(x.17, kauth.18))
+    
+     26. encrypted_secret
+               = encrypted_secret.18
+         kauth = kauth.18
+         s_enc1
+               = x.15
+         s_enc2
+               = (x.16⊕x.17)
+         s_enc3
+               = (x.15⊕x.16)
+         z     = sdec(encrypted_secret.18, KDF(x.17, kauth.18))
+    
+     27. encrypted_secret
+               = encrypted_secret.18
+         kauth = kauth.18
+         s_enc1
+               = s_enc1.18
+         s_enc2
+               = (x.15⊕x.16)
+         s_enc3
+               = (x.15⊕x.17)
+         z     = sdec(encrypted_secret.18,
+                      KDF((x.16⊕x.17⊕s_enc1.18), kauth.18))
+    
+     28. encrypted_secret
+               = encrypted_secret.18
+         kauth = kauth.18
+         s_enc1
+               = zero
+         s_enc2
+               = (x.15⊕x.16)
+         s_enc3
+               = (x.15⊕x.17)
+         z     = sdec(encrypted_secret.18, KDF((x.16⊕x.17), kauth.18))
+    
+     29. encrypted_secret
+               = encrypted_secret.18
+         kauth = kauth.18
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = x.15
+         s_enc3
+               = (x.16⊕x.17)
+         z     = sdec(encrypted_secret.18, KDF(x.17, kauth.18))
+    
+     30. encrypted_secret
+               = encrypted_secret.18
+         kauth = kauth.18
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = x.17
+         s_enc3
+               = (x.15⊕x.17)
+         z     = sdec(encrypted_secret.18, KDF(x.16, kauth.18))
+    
+     31. encrypted_secret
+               = encrypted_secret.18
+         kauth = kauth.18
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = zero
+         s_enc3
+               = (x.15⊕x.17)
+         z     = sdec(encrypted_secret.18, KDF((x.16⊕x.17), kauth.18))
+    
+     32. encrypted_secret
+               = encrypted_secret.18
+         kauth = kauth.18
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = (x.15⊕x.17)
+         s_enc3
+               = x.16
+         z     = sdec(encrypted_secret.18, KDF(x.17, kauth.18))
+    
+     33. encrypted_secret
+               = encrypted_secret.18
+         kauth = kauth.18
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = (x.15⊕x.17)
+         s_enc3
+               = x.17
+         z     = sdec(encrypted_secret.18, KDF(x.16, kauth.18))
+    
+     34. encrypted_secret
+               = encrypted_secret.18
+         kauth = kauth.18
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = (x.15⊕x.17)
+         s_enc3
+               = s_enc3.18
+         z     = sdec(encrypted_secret.18,
+                      KDF((x.16⊕x.17⊕s_enc3.18), kauth.18))
+    
+     35. encrypted_secret
+               = encrypted_secret.18
+         kauth = kauth.18
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = (x.15⊕x.17)
+         s_enc3
+               = zero
+         z     = sdec(encrypted_secret.18, KDF((x.16⊕x.17), kauth.18))
+    
+     36. encrypted_secret
+               = encrypted_secret.18
+         kauth = kauth.18
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = (x.15⊕x.17)
+         s_enc3
+               = (x.16⊕x.17)
+         z     = sdec(encrypted_secret.18, KDF(zero, kauth.18))
+    
+     37. encrypted_secret
+               = encrypted_secret.18
+         kauth = kauth.18
+         s_enc1
+               = (x.15⊕x.16⊕x.17)
+         s_enc2
+               = x.15
+         s_enc3
+               = x.16
+         z     = sdec(encrypted_secret.18, KDF(x.17, kauth.18))
+    
+     38. encrypted_secret
+               = encrypted_secret.19
+         kauth = kauth.19
+         s_enc1
+               = x.15
+         s_enc2
+               = (x.15⊕x.16⊕x.17)
+         s_enc3
+               = (x.16⊕x.18)
+         z     = sdec(encrypted_secret.19, KDF((x.17⊕x.18), kauth.19))
+    
+     39. encrypted_secret
+               = encrypted_secret.19
+         kauth = kauth.19
+         s_enc1
+               = x.15
+         s_enc2
+               = (x.16⊕x.17)
+         s_enc3
+               = (x.15⊕x.16⊕x.18)
+         z     = sdec(encrypted_secret.19, KDF((x.17⊕x.18), kauth.19))
+    
+     40. encrypted_secret
+               = encrypted_secret.19
+         kauth = kauth.19
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = x.17
+         s_enc3
+               = (x.15⊕x.17⊕x.18)
+         z     = sdec(encrypted_secret.19, KDF((x.16⊕x.18), kauth.19))
+    
+     41. encrypted_secret
+               = encrypted_secret.19
+         kauth = kauth.19
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = s_enc2.19
+         s_enc3
+               = (x.15⊕x.18)
+         z     = sdec(encrypted_secret.19,
+                      KDF((x.16⊕x.18⊕s_enc2.19), kauth.19))
+    
+     42. encrypted_secret
+               = encrypted_secret.19
+         kauth = kauth.19
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = (x.15⊕x.17)
+         s_enc3
+               = (x.16⊕x.17⊕x.18)
+         z     = sdec(encrypted_secret.19, KDF(x.18, kauth.19))
+    
+     43. encrypted_secret
+               = encrypted_secret.19
+         kauth = kauth.19
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = (x.15⊕x.17)
+         s_enc3
+               = (x.16⊕x.18)
+         z     = sdec(encrypted_secret.19, KDF((x.17⊕x.18), kauth.19))
+    
+     44. encrypted_secret
+               = encrypted_secret.19
+         kauth = kauth.19
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = (x.15⊕x.17)
+         s_enc3
+               = (x.17⊕x.18)
+         z     = sdec(encrypted_secret.19, KDF((x.16⊕x.18), kauth.19))
+    
+     45. encrypted_secret
+               = encrypted_secret.19
+         kauth = kauth.19
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = (x.15⊕x.17⊕x.18)
+         s_enc3
+               = x.17
+         z     = sdec(encrypted_secret.19, KDF((x.16⊕x.18), kauth.19))
+    
+     46. encrypted_secret
+               = encrypted_secret.19
+         kauth = kauth.19
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = (x.15⊕x.17⊕x.18)
+         s_enc3
+               = (x.16⊕x.17)
+         z     = sdec(encrypted_secret.19, KDF(x.18, kauth.19))
+    
+     47. encrypted_secret
+               = encrypted_secret.19
+         kauth = kauth.19
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = (x.17⊕x.18)
+         s_enc3
+               = (x.15⊕x.17)
+         z     = sdec(encrypted_secret.19, KDF((x.16⊕x.18), kauth.19))
+    
+     48. encrypted_secret
+               = encrypted_secret.19
+         kauth = kauth.19
+         s_enc1
+               = (x.15⊕x.16⊕x.17)
+         s_enc2
+               = x.15
+         s_enc3
+               = (x.16⊕x.18)
+         z     = sdec(encrypted_secret.19, KDF((x.17⊕x.18), kauth.19))
+    
+     49. encrypted_secret
+               = encrypted_secret.19
+         kauth = kauth.19
+         s_enc1
+               = (x.15⊕x.16⊕x.17)
+         s_enc2
+               = (x.15⊕x.18)
+         s_enc3
+               = x.16
+         z     = sdec(encrypted_secret.19, KDF((x.17⊕x.18), kauth.19))
+    
+     50. encrypted_secret
+               = encrypted_secret.19
+         kauth = kauth.19
+         s_enc1
+               = (x.15⊕x.16⊕x.17)
+         s_enc2
+               = (x.15⊕x.18)
+         s_enc3
+               = (x.16⊕x.18)
+         z     = sdec(encrypted_secret.19, KDF(x.17, kauth.19))
+    
+     51. encrypted_secret
+               = encrypted_secret.20
+         kauth = kauth.20
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = (x.15⊕x.17⊕x.18)
+         s_enc3
+               = (x.16⊕x.17⊕x.19)
+         z     = sdec(encrypted_secret.20, KDF((x.18⊕x.19), kauth.20))
+    
+     52. encrypted_secret
+               = encrypted_secret.20
+         kauth = kauth.20
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = (x.15⊕x.17⊕x.18)
+         s_enc3
+               = (x.17⊕x.19)
+         z     = sdec(encrypted_secret.20, KDF((x.16⊕x.18⊕x.19), kauth.20))
+    
+     53. encrypted_secret
+               = encrypted_secret.20
+         kauth = kauth.20
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = (x.17⊕x.18)
+         s_enc3
+               = (x.15⊕x.17⊕x.19)
+         z     = sdec(encrypted_secret.20, KDF((x.16⊕x.18⊕x.19), kauth.20))
+    
+     54. encrypted_secret
+               = encrypted_secret.20
+         kauth = kauth.20
+         s_enc1
+               = (x.15⊕x.16⊕x.17)
+         s_enc2
+               = (x.15⊕x.18)
+         s_enc3
+               = (x.16⊕x.18⊕x.19)
+         z     = sdec(encrypted_secret.20, KDF((x.17⊕x.19), kauth.20))
+    
+     55. encrypted_secret
+               = encrypted_secret.20
+         kauth = kauth.20
+         s_enc1
+               = (x.15⊕x.16⊕x.17)
+         s_enc2
+               = (x.15⊕x.18)
+         s_enc3
+               = (x.16⊕x.19)
+         z     = sdec(encrypted_secret.20, KDF((x.17⊕x.18⊕x.19), kauth.20))
+    
+     56. encrypted_secret
+               = encrypted_secret.20
+         kauth = kauth.20
+         s_enc1
+               = (x.15⊕x.16⊕x.17)
+         s_enc2
+               = (x.15⊕x.18⊕x.19)
+         s_enc3
+               = (x.16⊕x.18)
+         z     = sdec(encrypted_secret.20, KDF((x.17⊕x.19), kauth.20))
+    
+     57. encrypted_secret
+               = encrypted_secret.21
+         kauth = kauth.21
+         s_enc1
+               = (x.15⊕x.16⊕x.17)
+         s_enc2
+               = (x.15⊕x.18⊕x.19)
+         s_enc3
+               = (x.16⊕x.18⊕x.20)
+         z     = sdec(encrypted_secret.21, KDF((x.17⊕x.19⊕x.20), kauth.21))
+    
+     58. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = x.16
+         s_enc2
+               = x.18
+         s_enc3
+               = x.18
+         z     = x.15
+    
+     59. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = x.18
+         s_enc2
+               = x.16
+         s_enc3
+               = x.18
+         z     = x.15
+    
+     60. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = x.18
+         s_enc2
+               = x.18
+         s_enc3
+               = x.16
+         z     = x.15
+    
+     61. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = x.18
+         s_enc2
+               = x.19
+         s_enc3
+               = (x.16⊕x.18⊕x.19)
+         z     = x.15
+    
+     62. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = x.18
+         s_enc2
+               = zero
+         s_enc3
+               = (x.16⊕x.18)
+         z     = x.15
+    
+     63. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = x.18
+         s_enc2
+               = (x.16⊕x.18)
+         s_enc3
+               = zero
+         z     = x.15
+    
+     64. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = x.18
+         s_enc2
+               = (x.16⊕x.18⊕x.19)
+         s_enc3
+               = x.19
+         z     = x.15
+    
+     65. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = x.18
+         s_enc2
+               = (x.16⊕x.19)
+         s_enc3
+               = (x.18⊕x.19)
+         z     = x.15
+    
+     66. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = x.18
+         s_enc2
+               = (x.18⊕x.19)
+         s_enc3
+               = (x.16⊕x.19)
+         z     = x.15
+    
+     67. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = zero
+         s_enc2
+               = x.18
+         s_enc3
+               = (x.16⊕x.18)
+         z     = x.15
+    
+     68. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = zero
+         s_enc2
+               = (x.16⊕x.18)
+         s_enc3
+               = x.18
+         z     = x.15
+    
+     69. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = (x.16⊕x.18)
+         s_enc2
+               = x.18
+         s_enc3
+               = zero
+         z     = x.15
+    
+     70. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = (x.16⊕x.18)
+         s_enc2
+               = x.19
+         s_enc3
+               = (x.18⊕x.19)
+         z     = x.15
+    
+     71. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = (x.16⊕x.18)
+         s_enc2
+               = zero
+         s_enc3
+               = x.18
+         z     = x.15
+    
+     72. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = (x.16⊕x.18)
+         s_enc2
+               = (x.18⊕x.19)
+         s_enc3
+               = x.19
+         z     = x.15
+    
+     73. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = (x.16⊕x.18⊕x.19)
+         s_enc2
+               = x.18
+         s_enc3
+               = x.19
+         z     = x.15
+    
+     74. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = (x.16⊕x.18⊕x.19)
+         s_enc2
+               = (x.18⊕x.20)
+         s_enc3
+               = (x.19⊕x.20)
+         z     = x.15
+    
+     75. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = (x.18⊕x.19)
+         s_enc2
+               = x.18
+         s_enc3
+               = (x.16⊕x.19)
+         z     = x.15
+    
+     76. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = (x.18⊕x.19)
+         s_enc2
+               = (x.16⊕x.18)
+         s_enc3
+               = x.19
+         z     = x.15
+    
+     77. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = (x.18⊕x.19)
+         s_enc2
+               = (x.16⊕x.18⊕x.20)
+         s_enc3
+               = (x.19⊕x.20)
+         z     = x.15
+    
+     78. encrypted_secret
+               = senc(x.15, KDF(x.16, x.17))
+         kauth = x.17
+         s_enc1
+               = (x.18⊕x.19)
+         s_enc2
+               = (x.18⊕x.20)
+         s_enc3
+               = (x.16⊕x.19⊕x.20)
+         z     = x.15
+    
+     79. encrypted_secret
+               = senc(x.15, KDF(zero, x.16))
+         kauth = x.16
+         s_enc1
+               = x.17
+         s_enc2
+               = x.18
+         s_enc3
+               = (x.17⊕x.18)
+         z     = x.15
+    
+     80. encrypted_secret
+               = senc(x.15, KDF(zero, x.16))
+         kauth = x.16
+         s_enc1
+               = x.17
+         s_enc2
+               = (x.17⊕x.18)
+         s_enc3
+               = x.18
+         z     = x.15
+    
+     81. encrypted_secret
+               = senc(x.15, KDF(zero, x.16))
+         kauth = x.16
+         s_enc1
+               = (x.17⊕x.18)
+         s_enc2
+               = x.17
+         s_enc3
+               = x.18
+         z     = x.15
+    
+     82. encrypted_secret
+               = senc(x.15, KDF(zero, x.16))
+         kauth = x.16
+         s_enc1
+               = (x.17⊕x.18)
+         s_enc2
+               = (x.17⊕x.19)
+         s_enc3
+               = (x.18⊕x.19)
+         z     = x.15
+    
+     83. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = x.16
+         s_enc2
+               = x.17
+         s_enc3
+               = zero
+         z     = x.15
+    
+     84. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = x.16
+         s_enc2
+               = x.19
+         s_enc3
+               = (x.17⊕x.19)
+         z     = x.15
+    
+     85. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = x.16
+         s_enc2
+               = zero
+         s_enc3
+               = x.17
+         z     = x.15
+    
+     86. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = x.16
+         s_enc2
+               = (x.17⊕x.19)
+         s_enc3
+               = x.19
+         z     = x.15
+    
+     87. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = x.19
+         s_enc2
+               = x.16
+         s_enc3
+               = (x.17⊕x.19)
+         z     = x.15
+    
+     88. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = x.19
+         s_enc2
+               = (x.16⊕x.19)
+         s_enc3
+               = x.17
+         z     = x.15
+    
+     89. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = x.19
+         s_enc2
+               = (x.16⊕x.19⊕x.20)
+         s_enc3
+               = (x.17⊕x.20)
+         z     = x.15
+    
+     90. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = x.19
+         s_enc2
+               = (x.16⊕x.20)
+         s_enc3
+               = (x.17⊕x.19⊕x.20)
+         z     = x.15
+    
+     91. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = zero
+         s_enc2
+               = x.16
+         s_enc3
+               = x.17
+         z     = x.15
+    
+     92. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = zero
+         s_enc2
+               = (x.16⊕x.19)
+         s_enc3
+               = (x.17⊕x.19)
+         z     = x.15
+    
+     93. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = (x.16⊕x.19)
+         s_enc2
+               = x.17
+         s_enc3
+               = x.19
+         z     = x.15
+    
+     94. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = (x.16⊕x.19)
+         s_enc2
+               = x.19
+         s_enc3
+               = x.17
+         z     = x.15
+    
+     95. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = (x.16⊕x.19)
+         s_enc2
+               = x.20
+         s_enc3
+               = (x.17⊕x.19⊕x.20)
+         z     = x.15
+    
+     96. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = (x.16⊕x.19)
+         s_enc2
+               = zero
+         s_enc3
+               = (x.17⊕x.19)
+         z     = x.15
+    
+     97. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = (x.16⊕x.19)
+         s_enc2
+               = (x.17⊕x.19)
+         s_enc3
+               = zero
+         z     = x.15
+    
+     98. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = (x.16⊕x.19)
+         s_enc2
+               = (x.17⊕x.19⊕x.20)
+         s_enc3
+               = x.20
+         z     = x.15
+    
+     99. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = (x.16⊕x.19)
+         s_enc2
+               = (x.17⊕x.20)
+         s_enc3
+               = (x.19⊕x.20)
+         z     = x.15
+    
+    100. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = (x.16⊕x.19)
+         s_enc2
+               = (x.19⊕x.20)
+         s_enc3
+               = (x.17⊕x.20)
+         z     = x.15
+    
+    101. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = (x.16⊕x.19⊕x.20)
+         s_enc2
+               = x.19
+         s_enc3
+               = (x.17⊕x.20)
+         z     = x.15
+    
+    102. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = (x.16⊕x.19⊕x.20)
+         s_enc2
+               = (x.17⊕x.19)
+         s_enc3
+               = x.20
+         z     = x.15
+    
+    103. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = (x.16⊕x.19⊕x.20)
+         s_enc2
+               = (x.17⊕x.19⊕x.21)
+         s_enc3
+               = (x.20⊕x.21)
+         z     = x.15
+    
+    104. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = (x.16⊕x.19⊕x.20)
+         s_enc2
+               = (x.19⊕x.21)
+         s_enc3
+               = (x.17⊕x.20⊕x.21)
+         z     = x.15
+    
+    105. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = (x.19⊕x.20)
+         s_enc2
+               = (x.16⊕x.19)
+         s_enc3
+               = (x.17⊕x.20)
+         z     = x.15
+    
+    106. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17), x.18))
+         kauth = x.18
+         s_enc1
+               = (x.19⊕x.20)
+         s_enc2
+               = (x.16⊕x.19⊕x.21)
+         s_enc3
+               = (x.17⊕x.20⊕x.21)
+         z     = x.15
+    
+    107. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17⊕x.18), x.19))
+         kauth = x.19
+         s_enc1
+               = x.16
+         s_enc2
+               = x.17
+         s_enc3
+               = x.18
+         z     = x.15
+    
+    108. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17⊕x.18), x.19))
+         kauth = x.19
+         s_enc1
+               = x.16
+         s_enc2
+               = (x.17⊕x.20)
+         s_enc3
+               = (x.18⊕x.20)
+         z     = x.15
+    
+    109. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17⊕x.18), x.19))
+         kauth = x.19
+         s_enc1
+               = (x.16⊕x.20)
+         s_enc2
+               = x.17
+         s_enc3
+               = (x.18⊕x.20)
+         z     = x.15
+    
+    110. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17⊕x.18), x.19))
+         kauth = x.19
+         s_enc1
+               = (x.16⊕x.20)
+         s_enc2
+               = (x.17⊕x.20)
+         s_enc3
+               = x.18
+         z     = x.15
+    
+    111. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17⊕x.18), x.19))
+         kauth = x.19
+         s_enc1
+               = (x.16⊕x.20)
+         s_enc2
+               = (x.17⊕x.20⊕x.21)
+         s_enc3
+               = (x.18⊕x.21)
+         z     = x.15
+    
+    112. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17⊕x.18), x.19))
+         kauth = x.19
+         s_enc1
+               = (x.16⊕x.20)
+         s_enc2
+               = (x.17⊕x.21)
+         s_enc3
+               = (x.18⊕x.20⊕x.21)
+         z     = x.15
+    
+    113. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17⊕x.18), x.19))
+         kauth = x.19
+         s_enc1
+               = (x.16⊕x.20⊕x.21)
+         s_enc2
+               = (x.17⊕x.20)
+         s_enc3
+               = (x.18⊕x.21)
+         z     = x.15
+    
+    114. encrypted_secret
+               = senc(x.15, KDF((x.16⊕x.17⊕x.18), x.19))
+         kauth = x.19
+         s_enc1
+               = (x.16⊕x.20⊕x.21)
+         s_enc2
+               = (x.17⊕x.20⊕x.22)
+         s_enc3
+               = (x.18⊕x.21⊕x.22)
+         z     = x.15
+  */
+
+restriction OnlyOnce:
+  "∀ #i #j v.
+    ((OnlyOnce( v ) @ #i) ∧ (OnlyOnce( v ) @ #j)) ⇒ (#i = #j)"
+  // safety formula
+
+lemma executability:
+  exists-trace
+  "(¬(∃ #i. AdversaryAction( ) @ #i)) ∧
+   (∃ cid pw secret #i #j #k #l.
+     (((ClientInitialise( cid, pw, secret ) @ #i) ∧
+       (ClientReconstructStart( cid, pw ) @ #j)) ∧
+      (ClientReconstructionMiddle( cid, pw ) @ #k)) ∧
+     (ClientReconstructFinish( cid, pw, secret ) @ #l))"
+/*
+guarded formula characterizing all satisfying traces:
+"(∀ #i. (AdversaryAction( ) @ #i) ⇒ ⊥) ∧
+ (∃ cid pw secret #i #j #k #l.
+   (ClientInitialise( cid, pw, secret ) @ #i) ∧
+   (ClientReconstructStart( cid, pw ) @ #j) ∧
+   (ClientReconstructionMiddle( cid, pw ) @ #k) ∧
+   (ClientReconstructFinish( cid, pw, secret ) @ #l))"
+*/
+simplify
+solve( Client_0( $cid, ~pw, ~secret ) ▶₀ #i )
+  case client_0
+  solve( !Server( $sid1 ) ▶₇ #i )
+    case create_server
+    solve( !Server( $sid2 ) ▶₈ #i )
+      case create_server
+      solve( !Server( $sid3 ) ▶₉ #i )
+        case create_server
+        solve( Client_1( $cid, ~pw, $sid1.1, $sid2.1, $sid3.1 ) ▶₀ #j )
+          case client_1
+          solve( Client_2( $cid, ~pw, <$sid1.1, ~sessId1.2>,
+                           <$sid2.1, ~sessId2.2>, <$sid3.1, ~sessId3.2>
+                 ) ▶₀ #k )
+            case client_2
+            solve( SCClientIn( ~sessId1.1, $sid1, koprf1.1 ) ▶₁ #k )
+              case client_in_case_1
+              by contradiction /* from formulas */
+            next
+              case client_in_case_2
+              solve( SCClientIn( ~sessId2.1, $sid2, koprf2.1 ) ▶₂ #k )
+                case client_in_case_1
+                by contradiction /* from formulas */
+              next
+                case client_in_case_2
+                solve( SCClientIn( ~sessId3.1, $sid3, koprf3.1 ) ▶₃ #k )
+                  case client_in_case_1
+                  by contradiction /* from formulas */
+                next
+                  case client_in_case_2
+                  solve( Client_3( $cid, ~pw, kauth, <$sid1.1, ~sessId1.2>,
+                                   <$sid2.1, ~sessId2.2>, <$sid3.1, ~sessId3.2>
+                         ) ▶₀ #l )
+                    case client_3
+                    solve( SCClientIn( ~sessId1.1, $sid1, s_enc1.1 ) ▶₁ #l )
+                      case client_in_case_1
+                      by contradiction /* from formulas */
+                    next
+                      case client_in_case_2
+                      by sorry
+                    next
+                      case client_in_case_3
+                      solve( SCClientIn( ~sessId2.1, $sid2, s_enc2.1 ) ▶₂ #l )
+                        case client_in_case_1
+                        by contradiction /* from formulas */
+                      next
+                        case client_in_case_2
+                        by sorry
+                      next
+                        case client_in_case_3
+                        solve( SCClientIn( ~sessId3.1, $sid3, s_enc3.1 ) ▶₃ #l )
+                          case client_in_case_1
+                          by contradiction /* from formulas */
+                        next
+                          case client_in_case_2
+                          by sorry
+                        next
+                          case client_in_case_3
+                          solve( !KU( senc(~secret, KDF(x, PRF(z.2, ~pw))) ) @ #vk )
+                            case c_senc
+                            by sorry
+                          next
+                            case client_1
+                            solve( SCServerIn( ~sessId1.1, $sid1, <$cid.1, hpw> ) ▶₁ #vr.6 )
+                              case server_in_case_1
+                              by contradiction /* from formulas */
+                            next
+                              case server_in_case_2
+                              solve( SCServerIn( ~sessId, $sid1,
+                                                 <$cid, koprf1.1, s_enc_share, kvfy>
+                                     ) ▶₁ #vr.7 )
+                                case server_in_case_1
+                                by contradiction /* from formulas */
+                              next
+                                case server_in_case_2
+                                solve( SCServerIn( ~sessId2.1, $sid2, <$cid.1, hpw> ) ▶₁ #vr.11 )
+                                  case server_in_case_1
+                                  by contradiction /* from formulas */
+                                next
+                                  case server_in_case_2
+                                  solve( SCServerIn( ~sessId.1, $sid2,
+                                                     <$cid, koprf2.1, s_enc_share, kvfy>
+                                         ) ▶₁ #vr.12 )
+                                    case server_in_case_1
+                                    by contradiction /* from formulas */
+                                  next
+                                    case server_in_case_2
+                                    by contradiction /* from formulas */
+                                  next
+                                    case server_in_case_3
+                                    solve( SCServerIn( ~sessId3.1, $sid3, <$cid.1, hpw>
+                                           ) ▶₁ #vr.16 )
+                                      case server_in_case_1
+                                      by contradiction /* from formulas */
+                                    next
+                                      case server_in_case_2
+                                      solve( SCServerIn( ~sessId.1, $sid3,
+                                                         <$cid, koprf3.1, s_enc_share, kvfy>
+                                             ) ▶₁ #vr.17 )
+                                        case server_in_case_1
+                                        by contradiction /* from formulas */
+                                      next
+                                        case server_in_case_2
+                                        solve( SCServerIn( ~sessId1, $sid1, sign(h(hpw), x.1)
+                                               ) ▶₁ #vr.21 )
+                                          case server_in_case_1
+                                          by contradiction /* from formulas */
+                                        next
+                                          case server_in_case_2
+                                          solve( SCServerIn( ~sessId1, $sid1, <$cid.1, h(~pw)>
+                                                 ) ▶₁ #vr.22 )
+                                            case server_in_case_1
+                                            by contradiction /* from formulas */
+                                          next
+                                            case server_in_case_2
+                                            solve( SCServerIn( ~sessId.1, $sid1,
+                                                               <$cid, koprf_share, s_enc1.1, 
+                                                                pk(KDF(PRF(z, ~pw), '1'))>
+                                                   ) ▶₁ #vr.23 )
+                                              case server_in_case_1
+                                              by contradiction /* from formulas */
+                                            next
+                                              case server_in_case_2
+                                              solve( SCServerIn( ~sessId2.1, $sid2,
+                                                                 sign(h(hpw), x.1)
+                                                     ) ▶₁ #vr.27 )
+                                                case server_in_case_1
+                                                by contradiction /* from formulas */
+                                              next
+                                                case server_in_case_2
+                                                solve( SCServerIn( ~sessId2.1, $sid2,
+                                                                   <$cid.1, h(~pw)>
+                                                       ) ▶₁ #vr.28 )
+                                                  case server_in_case_1
+                                                  by contradiction /* from formulas */
+                                                next
+                                                  case server_in_case_2
+                                                  solve( SCServerIn( ~sessId.1, $sid2,
+                                                                     <$cid, koprf_share, s_enc2.1, 
+                                                                      pk(KDF(PRF(z, ~pw), '2'))>
+                                                         ) ▶₁ #vr.29 )
+                                                    case server_in_case_1
+                                                    by contradiction /* from formulas */
+                                                  next
+                                                    case server_in_case_2
+                                                    solve( SCServerIn( ~sessId3.1, $sid3,
+                                                                       sign(h(hpw), x.1)
+                                                           ) ▶₁ #vr.33 )
+                                                      case server_in_case_1
+                                                      by contradiction /* from formulas */
+                                                    next
+                                                      case server_in_case_2
+                                                      solve( SCServerIn( ~sessId3.1, $sid3,
+                                                                         <$cid.1, h(~pw)>
+                                                             ) ▶₁ #vr.34 )
+                                                        case server_in_case_1
+                                                        by contradiction /* from formulas */
+                                                      next
+                                                        case server_in_case_2
+                                                        solve( SCServerIn( ~sessId.1, $sid3,
+                                                                           <$cid, koprf_share, 
+                                                                            s_enc3.1, 
+                                                                            pk(KDF(PRF(z, ~pw),
+                                                                                   '3'))
+                                                                           >
+                                                               ) ▶₁ #vr.35 )
+                                                          case server_in_case_1
+                                                          by contradiction /* from formulas */
+                                                        next
+                                                          case server_in_case_2
+                                                          solve( splitEqs(0) )
+                                                            case split
+                                                            SOLVED // trace found
+                                                          qed
+                                                        qed
+                                                      qed
+                                                    qed
+                                                  qed
+                                                qed
+                                              qed
+                                            qed
+                                          qed
+                                        qed
+                                      qed
+                                    qed
+                                  next
+                                    case server_in_case_4
+                                    by contradiction /* from formulas */
+                                  qed
+                                qed
+                              next
+                                case server_in_case_3
+                                by contradiction /* from formulas */
+                              next
+                                case server_in_case_4
+                                by contradiction /* from formulas */
+                              qed
+                            qed
+                          next
+                            case eavesdrop_client_case_1
+                            by contradiction /* from formulas */
+                          next
+                            case eavesdrop_client_case_2
+                            by contradiction /* from formulas */
+                          next
+                            case eavesdrop_server_case_1
+                            by contradiction /* from formulas */
+                          next
+                            case eavesdrop_server_case_2
+                            by contradiction /* from formulas */
+                          qed
+                        qed
+                      qed
+                    qed
+                  qed
+                next
+                  case client_in_case_3
+                  by sorry
+                qed
+              next
+                case client_in_case_3
+                by sorry
+              qed
+            next
+              case client_in_case_3
+              by sorry
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* All wellformedness checks were successful. */
+
+/*
+Generated from:
+Tamarin version 1.10.0
+Maude version 2.7.1
+Git revision: UNKNOWN, branch: UNKNOWN
+Compiled at: 2024-10-30 14:56:23.355649243 UTC
+*/
+
+end
