@@ -21,7 +21,7 @@ theory SVR3_Simple
 
 // Issues/Todos:
 // - PQ behaviour of adversary
-// - secrecy lemmas, ...
+// - bruteforce attacks?
 
 
 begin
@@ -54,7 +54,11 @@ functions:
 */
 
 rule create_server:
-    []--[]->[ !Server($sid) ]
+    []
+  --[
+      ServerCreate($sid) // TODO: Consider Removing
+    ]->
+    [ !Server($sid) ]
 
 
 // adversary capabilities
@@ -69,14 +73,13 @@ rule compromise_server:
 
 // Protocol
 // Initialisation of the client with password and secret to be protected.
-// Each client can only store 1 secret.
+// Each client can store and register multiple secrets. Nondeterminism ensures that it is possible to get the right responses back from the servers.
 rule client_initialise:
     [
       Fr(~pw), Fr(~secret)
     ]
   --[
       _restrict(NEQ($cid, 'adv')) // The adversary may contact the servers, but can't operate as its own client. Without this restriction, it would be as if the adversary could compromise 1 client.
-    , OnlyOnce(<'client_initialise', $cid>) // TODO: Remove!
     ]->
     [
       Client_0($cid, ~pw, ~secret)
@@ -111,13 +114,17 @@ rule client_register:
     , ClientRegister($cid, ~pw, ~secret)
     , Source(~koprf1), Source(~koprf2), Source(~koprf3)
     , Source(~s_enc1), Source(~s_enc2), Source(~s_enc3)
+    , Secret('koprf', koprf)
+    , Secret('kauth', kauth)
+    , Secret('kenc', kenc)
+    , Secret('secret', ~secret)
     ]->
     [ 
       Out(encrypted_secret) // Q: should this be annotated with $cid? IMO not needed as long as we don't strive for success guarantees
     , SCClientOut($cid, $sid1, <$cid, ~koprf1, ~s_enc1, kvfy1>)
     , SCClientOut($cid, $sid2, <$cid, ~koprf2, ~s_enc2, kvfy2>)
     , SCClientOut($cid, $sid3, <$cid, ~koprf3, ~s_enc3, kvfy3>)
-    , Client_1($cid, ~pw, $sid1, $sid2, $sid3) // forget the secret
+    , !Client_1($cid, ~pw, $sid1, $sid2, $sid3) // forget the secret
     ]
 
 // Server Registration
@@ -138,7 +145,7 @@ rule server_register:
 // Client Reconstruction (Phase 1)
 rule client_reconstruct_phase1:
     [
-      Client_1($cid, ~pw, $sid1, $sid2, $sid3)
+      !Client_1($cid, ~pw, $sid1, $sid2, $sid3)
     ]
   --[
       ClientReconstructPhase1($cid, ~pw)
@@ -229,9 +236,20 @@ rule client_reconstruct_finish:
     []
 
 
-restriction OnlyOnce:
-    "All #i #j v. OnlyOnce(v)@#i & OnlyOnce(v)@#j ==> #i = #j"
+//restriction OnlyOnce:
+//    "All #i #j v. OnlyOnce(v)@#i & OnlyOnce(v)@#j ==> #i = #j"
 
+/*restriction NumServers: // Allows at most 3 servers
+    // Given three distinct servers sid1, sid2, sid3, the 4th server must be one of the other 3.
+    "All sid1 sid2 sid3 sid4 #i #j #k #l.
+      ServerCreate(sid1)@#i & ServerCreate(sid2)@#j & ServerCreate(sid3)@#k & ServerCreate(sid4)@#l
+      & DISTINCT(sid1, sid2, sid3)
+      ==> sid4 = sid1 | sid4 = sid2 | sid4 = sid3"*/
+
+restriction NumCompromised: // Allows at most 2 compromised servers
+    // Given "three" compromised servers, 2 of them must be equal
+    "All sid1 sid2 sid3 #i #j #k. Compromise(sid1)@#i & Compromise(sid2)@#j & Compromise(sid3)@#k
+      ==> sid1 = sid2 | sid1 = sid3 | sid2 = sid3"
 
 
 // Sources lemma:
@@ -260,8 +278,14 @@ lemma executability:
       // adversary doesn't do anything
       not (Ex #i. AdversaryAction()@#i)
       &
+      // client only registers once
+      (All cid pw1 pw2 secret1 secret2 #i #j. ClientRegister(cid, pw1, secret1)@#i & ClientRegister(cid, pw2, secret2)@#j ==> #i = #j)
+      &
+      // client only reconstructs once
+      (All cid pw1 pw2 #i #j. ClientReconstructPhase1(cid, pw1)@#i & ClientReconstructPhase1(cid, pw2)@#j ==> #i = #j)
+      &
       // servers only run once
-      (All sid #i #j. ServerReconstructPhase1(sid)@#i &ServerReconstructPhase1(sid)@#j ==> #i = #j)
+      (All sid #i #j. ServerReconstructPhase1(sid)@#i & ServerReconstructPhase1(sid)@#j ==> #i = #j)
       &
       Ex cid pw secret #i #j #k #l.
       ( ClientRegister(cid, pw, secret)@#i 
@@ -271,5 +295,15 @@ lemma executability:
       )
     "
 
+lemma secret_koprf:
+    "All koprf #i. Secret('koprf', koprf)@#i ==> (not Ex #j. K(koprf)@#j)"
 
+lemma secret_kauth:
+    "All kauth #i. Secret('kauth', kauth)@#i ==> (not Ex #j. K(kauth)@#j)"
+
+lemma secret_kenc:
+    "All kenc #i. Secret('kenc', kenc)@#i ==> (not Ex #j. K(kenc)@#j)"
+
+lemma secret_secret:
+    "All secret #i. Secret('secret', secret)@#i ==> (not Ex #j. K(secret)@#j)"
 end
