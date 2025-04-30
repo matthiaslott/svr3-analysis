@@ -5,7 +5,6 @@ theory SVR3_Simple
 // - No Noise.ExportedAuthenticator
 // - TOPRF has neither password hash nor key shares blinded
 // - Signature instead of ZKP
-// - Client cannot execute reconstruction phase more than once
 // - Client reuses sid from registration phase
 //   Justification: In the "real world", client needs to remember the sids to avoid sending signatures to the wrong servers.
 //   In the real world, this is "public" information?
@@ -16,7 +15,8 @@ theory SVR3_Simple
 // Adversary capabilities:
 // - Server compromise: Observe all the secrets that were stored on the server as well as send/receive messages on its behalf
 // - Access to client identifiers due to compromise of authentication server
-// - Access to Quantum Computer that solves DLOG.
+// - Interact with the servers on its own.
+// - Access to Quantum Computer that solves DLOG. Not modelled yet because simpler protocol doesn't use DLOGs.
 
 
 // Issues/Todos:
