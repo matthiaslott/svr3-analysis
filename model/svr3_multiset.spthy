@@ -3,21 +3,19 @@ theory SVR3
 // Models a simpler underapproximation of the SVR3 protocol:
 // - No key rotation is modelled
 // - No Noise.ExportedAuthenticator
-// - T-OPRF exchanges are given in plaintext to the PQ adversary. They are hidden from the pre-quantum adversary because they can't be deduced.
-//   THIS INVOLVES SOME REASONING ABOUT ATTACKER CAPABILITIES!
 // - Signature instead of ZKP
 // - Client reuses sid from registration phase
 //   Justification: In the "real world", client needs to remember the sids to avoid sending signatures to the wrong servers.
 //   In the real world, this is "public" information?
 
 // Neglects certain adversary capabilities:
-// - brute force attack of password (and thus the secret) might be possible, simply by compromising one server and comparing against K^vfy. But this isn't modelled
+// - brute force attack of password (and thus the secret) might be possible, simply by compromising one server and comparing against h(pw). But this isn't modelled
 
 // Adversary capabilities:
 // - Server compromise: Observe all the secrets that were stored on the server as well as send/receive messages on its behalf
 // - Access to client identifiers due to compromise of authentication server
 // - Interact with the servers on its own.
-// - Access to Quantum Computer that solves DLOG/.... Not modelled yet because simpler protocol doesn't use DLOGs.
+// - Access to Quantum Computer that solves DLOG. Not modelled yet because simpler protocol doesn't use DLOGs.
 
 
 // Issues/Todos:
@@ -26,19 +24,29 @@ theory SVR3
 // - PQ behaviour to allow PQ attack on koprf and Kauth
 
 
+
+
+
+//
+//
+// INCORRECT MODEL, CAREFUL
+//
+//
+
+
+
+
+
 begin
 
-builtins: xor, hashing, symmetric-encryption, signing
+builtins: xor, hashing, symmetric-encryption, signing, multiset
 
 predicates:
     NEQ(x, y) <=> not (x = y)
   , DISTINCT(x, y, z) <=> not (x = y | x = z | y = z)
 
 functions:
-    blind/1 // hides values from the pre-quantum adversary
-    // PRF: modelled explicitly instead of h(pw||[koprf]h(pw)) because it would require a function anyway for [koprf]h(pw)
-    // the relevant property is given: can only be evaluated if pw and koprf are known. Knowing koprf is equivalent to having enough of its shares.
-  , PRF/2
+    mul/2 // scalar multiplication
   , KDF/2
 
 // provides: SCClientOut, SCClientIn, SCServerOut, SCServerIn
@@ -48,7 +56,9 @@ functions:
 // World Building
 rule create_server:
     []
-  --[]->
+  --[
+      ServerCreate($sid) // TODO: Consider Removing
+    ]->
     [ !Server($sid) ]
 
 
@@ -62,26 +72,16 @@ rule compromise_server:
     ]->
     [ !Compromised($sid) ]
 
-// use quantum computer to break the blinding
-rule unblind[no_derivcheck]:
-    [ In(blind(x)) ]
-  --[ 
-      SourcesUnblind(x)
-    , AdversaryAction()
-    , PQAdversaryAction()
-    ]->
-    [ Out(x) ]
+// 
+rule combine[no_derivcheck]:
+    [ In(mul(a, x)), In(mul(b, x)) ]
+  --[]->
+    [ Out(mul(a ++ b, x)) ]
 
-// evaluate the T-OPRF
-rule toprf_evaluate[no_derivcheck]:
-    [
-      In(x)
-    , In(blind(koprf1)), In(blind(koprf2)), In(blind(koprf3))
-    ]
-  --[ AdversaryAction() ]->
-    [
-      Out(PRF(x, koprf1 XOR koprf2 XOR koprf3))
-    ]
+rule extract[no_derivcheck]:
+    [ In(mul('empty', x)) ]
+  --[ SourcesExtract(x) ]->
+    [ Out(x) ]
 
 // Protocol
 // Initialisation of the client with password and secret to be protected.
@@ -100,9 +100,9 @@ rule client_initialise:
 // Client Registration    
 rule client_register:
     let
-        koprf = ~koprf1 XOR ~koprf2 XOR ~koprf3
+        koprf = ~koprf1 ++ ~koprf2 ++ ~koprf3
         s_enc = ~s_enc1 XOR ~s_enc2 XOR ~s_enc3
-        kauth = PRF(~pw, koprf) // not modelled using hash functions (see definition of PRF for reason)
+        kauth = h(<~pw, mul('empty' ++ koprf, h(~pw))>)
         kenc = KDF(s_enc, kauth)
         ksign1 = KDF(kauth, '1')
         ksign2 = KDF(kauth, '2')
@@ -124,10 +124,8 @@ rule client_register:
   --[
       _restrict(DISTINCT($sid1, $sid2, $sid3))
     , ClientRegister($cid, ~pw, ~secret)
-    , SourceC(blind(~koprf1)), SourceC(blind(~koprf2)), SourceC(blind(~koprf3))
     , SourceC(~s_enc1), SourceC(~s_enc2), SourceC(~s_enc3)
-    , SourceB(h(~pw))
-    , SourceB(~koprf1), SourceB(~koprf2), SourceB(~koprf3)
+    , SourceT(h(~pw))
     , Secret('koprf', koprf, $cid, $sid1, $sid2, $sid3)
     , Secret('kauth', kauth, $cid, $sid1, $sid2, $sid3)
     , Secret('kenc', kenc, $cid, $sid1, $sid2, $sid3)
@@ -148,8 +146,7 @@ rule server_register:
     , SCServerIn($client, $sid, <$cid, koprf_share, s_enc_share, kvfy>) // Note: $client and $cid don't necessarily match because the client isn't authenticated.
     ]
   --[
-      ServerAction()
-    , SourceC(blind(koprf_share)) // adversary provided koprf_share
+      //ServerInitialise($sid, $cid, koprf_share, s_enc_share, kvfy)
     ]->
     [
       !Server_1($sid, $cid, koprf_share, s_enc_share, kvfy)
@@ -161,51 +158,58 @@ rule server_register:
 rule client_reconstruct_phase1:
     [
       !Client_1($cid, ~pw, $sid1, $sid2, $sid3)
+    , Fr(~b)
     ]
   --[
       ClientReconstructPhase1($cid, ~pw)
+    , SourceT(mul('empty' ++ ~b, h(~pw)))
     ]->
     [ 
-      SCClientOut($cid, $sid1, <$cid, blind(h(~pw))>)
-    , SCClientOut($cid, $sid2, <$cid, blind(h(~pw))>)
-    , SCClientOut($cid, $sid3, <$cid, blind(h(~pw))>)
-    , Client_2($cid, ~pw, $sid1, $sid2, $sid3)
+      SCClientOut($cid, $sid1, <$cid, mul('empty' ++ ~b, h(~pw))>)
+    , SCClientOut($cid, $sid2, <$cid, mul('empty' ++ ~b, h(~pw))>)
+    , SCClientOut($cid, $sid3, <$cid, mul('empty' ++ ~b, h(~pw))>)
+    , Client_2($cid, ~pw, $sid1, $sid2, $sid3, ~b)
     ]
 
     
 rule server_reconstruct_phase1:
+    let
+      bhpw = mul(factors, hpw)
+    in
     [
       !Server_1($sid, $cid, koprf_share, s_enc_share, kvfy)
     , SCServerIn($client, $sid, <$cid, bhpw>) // Note: $client and $cid don't necessarily match because the client isn't authenticated.
     ]
   --[
-      ServerAction()
-    , ServerReconstructPhase1($sid)
+      ServerReconstructPhase1($sid)
+    , SourceC(mul(factors ++ koprf_share, bhpw))
     ]->
     [
-      SCServerOut($client, $sid, blind(koprf_share))
+      SCServerOut($client, $sid, mul(factors ++ koprf_share, bhpw))
     , Server_2($sid, $cid, s_enc_share, kvfy, bhpw)
     ]
 
 
-
-rule client_reconstruct_phase2[no_derivcheck]:
+// PATTERN MATCHING TO:
+// - deblind with ~b (uses commutativity)
+// - combine the shares
+rule client_reconstruct_phase2:
     let
-        koprf = koprf1 XOR koprf2 XOR koprf3
-        kauth = PRF(~pw, koprf)
+        kauth = h(<~pw, mul('empty' ++ koprf1 ++ koprf2 ++ koprf3, hpw)>)
         ksign1 = KDF(kauth, '1')
         ksign2 = KDF(kauth, '2')
         ksign3 = KDF(kauth, '3')
-        c = h(blind(h(~pw))) // Q: Think about how to model Noise.ExportedAuthenticator and if it even needs to be modelled!
+        B = mul('empty' ++ ~b, h(~pw)) // was already produced once, so no need to add it as a source here
+        c = h(B) // Q: Think about how to model Noise.ExportedAuthenticator and if it even needs to be modelled!
         sig1 = sign(c, ksign1)
         sig2 = sign(c, ksign2)
         sig3 = sign(c, ksign3)
     in 
     [
-      Client_2($cid, ~pw, $sid1, $sid2, $sid3)
-    , SCClientIn($cid, $sid1, blind(koprf1))
-    , SCClientIn($cid, $sid2, blind(koprf2))
-    , SCClientIn($cid, $sid3, blind(koprf3))
+      Client_2($cid, ~pw, $sid1, $sid2, $sid3, ~b)
+    , SCClientIn($cid, $sid1, mul('empty' ++ ~b ++ koprf1, hpw))
+    , SCClientIn($cid, $sid2, mul('empty' ++ ~b ++ koprf2, hpw))
+    , SCClientIn($cid, $sid3, mul('empty' ++ ~b ++ koprf3, hpw))
     ]
   --[
       ClientReconstructPhase2($cid, ~pw)
@@ -227,7 +231,6 @@ rule server_reconstruct_phase2:
     ]
   --[
       _restrict(verify(sig, c, kvfy) = true)
-    , ServerAction()
     ]->
     [
       SCServerOut($client, $sid, s_enc_share)
@@ -256,9 +259,6 @@ rule client_reconstruct_finish:
 //restriction OnlyOnce:
 //    "All #i #j v. OnlyOnce(v)@#i & OnlyOnce(v)@#j ==> #i = #j"
 
-restriction servers_offline:
-    "All #i #j. PQAdversaryAction()@#i & ServerAction()@#j ==> #j < #i"
-
 // Sources lemma:
 // There are 22 partial deconstructions because of adversary_recv.
 // Tamarin believes any msg can be derived using that rule.
@@ -272,18 +272,16 @@ restriction servers_offline:
 // - All this boils down to the initial koprf and s_enc shares
 
 lemma types [sources]:
-    "(
-      All msg #i.
+    "(All msg #i.
       SourcesAdversaryRecv(msg)@#i
       ==>
       ( (Ex #j. SourceC(msg)@#j & #j < #i)
       | (Ex #j. !KU(msg)@#j & #j < #i)
       )
-    ) & (
-      All msg #i.
-      SourcesUnblind(msg)@#i
+    ) & (All msg #i.
+      SourcesExtract(msg)@#i
       ==>
-      ( (Ex #j. SourceB(msg)@#j & #j < #i)
+      ( (Ex #j. SourceT(msg)@#j & #j < #i)
       | (Ex #j. !KU(msg)@#j & #j < #i)
       )
     )
@@ -311,35 +309,19 @@ lemma executability:
       )
     "
 
-lemma secret_koprf_pre_quantum:
-    "All koprf cid sid1 sid2 sid3 #i. Secret('koprf', koprf, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. K(koprf)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
-
-lemma secret_kauth_pre_quantum:
-    "All kauth cid sid1 sid2 sid3 #i. Secret('kauth', kauth, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. K(kauth)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
-
-lemma secret_kenc_pre_quantum:
-    "All kenc cid sid1 sid2 sid3 #i. Secret('kenc', kenc, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. K(kenc)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
-
-lemma secret_secret_pre_quantum:
-    "All secret cid sid1 sid2 sid3 #i. Secret('secret', secret, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. K(secret)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
-
-lemma secret_koprf_post_quantum:
+lemma secret_koprf:
     "All koprf cid sid1 sid2 sid3 #i. Secret('koprf', koprf, cid, sid1, sid2, sid3)@#i
       ==> (not Ex #j. K(koprf)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
-lemma secret_kauth_post_quantum:
+lemma secret_kauth:
     "All kauth cid sid1 sid2 sid3 #i. Secret('kauth', kauth, cid, sid1, sid2, sid3)@#i
       ==> (not Ex #j. K(kauth)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
-lemma secret_kenc_post_quantum:
+lemma secret_kenc:
     "All kenc cid sid1 sid2 sid3 #i. Secret('kenc', kenc, cid, sid1, sid2, sid3)@#i
       ==> (not Ex #j. K(kenc)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
-lemma secret_secret_post_quantum:
+lemma secret_secret:
     "All secret cid sid1 sid2 sid3 #i. Secret('secret', secret, cid, sid1, sid2, sid3)@#i
       ==> (not Ex #j. K(secret)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
