@@ -75,12 +75,17 @@ rule compromise_server:
 // 
 rule combine[no_derivcheck]:
     [ In(mul(a, x)), In(mul(b, x)) ]
-  --[]->
+  --[ ]->
     [ Out(mul(a ++ b, x)) ]
 
+rule reduce[no_derivcheck]:
+    [ In(a), In(mul(a ++ b, x)) ]
+  --[]->
+    [ Out(mul(b, x)) ]
+
 rule extract[no_derivcheck]:
-    [ In(mul('empty', x)) ]
-  --[ SourcesExtract(x) ]->
+    [ In(a), In(mul(a, x)) ]
+  --[ SourcesExtract(mul(a, x)) ]->
     [ Out(x) ]
 
 // Protocol
@@ -102,7 +107,7 @@ rule client_register:
     let
         koprf = ~koprf1 ++ ~koprf2 ++ ~koprf3
         s_enc = ~s_enc1 XOR ~s_enc2 XOR ~s_enc3
-        kauth = h(<~pw, mul('empty' ++ koprf, h(~pw))>)
+        kauth = h(<~pw, mul(koprf, h(~pw))>)
         kenc = KDF(s_enc, kauth)
         ksign1 = KDF(kauth, '1')
         ksign2 = KDF(kauth, '2')
@@ -162,12 +167,11 @@ rule client_reconstruct_phase1:
     ]
   --[
       ClientReconstructPhase1($cid, ~pw)
-    , SourceT(mul('empty' ++ ~b, h(~pw)))
     ]->
     [ 
-      SCClientOut($cid, $sid1, <$cid, mul('empty' ++ ~b, h(~pw))>)
-    , SCClientOut($cid, $sid2, <$cid, mul('empty' ++ ~b, h(~pw))>)
-    , SCClientOut($cid, $sid3, <$cid, mul('empty' ++ ~b, h(~pw))>)
+      SCClientOut($cid, $sid1, <$cid, mul(~b, h(~pw))>)
+    , SCClientOut($cid, $sid2, <$cid, mul(~b, h(~pw))>)
+    , SCClientOut($cid, $sid3, <$cid, mul(~b, h(~pw))>)
     , Client_2($cid, ~pw, $sid1, $sid2, $sid3, ~b)
     ]
 
@@ -195,11 +199,12 @@ rule server_reconstruct_phase1:
 // - combine the shares
 rule client_reconstruct_phase2:
     let
-        kauth = h(<~pw, mul('empty' ++ koprf1 ++ koprf2 ++ koprf3, hpw)>)
+        koprf = koprf1 ++ koprf2 ++ koprf3
+        kauth = h(<~pw, mul(koprf, hpw)>)
         ksign1 = KDF(kauth, '1')
         ksign2 = KDF(kauth, '2')
         ksign3 = KDF(kauth, '3')
-        B = mul('empty' ++ ~b, h(~pw)) // was already produced once, so no need to add it as a source here
+        B = mul(~b, h(~pw)) // was already produced once, so no need to add it as a source here
         c = h(B) // Q: Think about how to model Noise.ExportedAuthenticator and if it even needs to be modelled!
         sig1 = sign(c, ksign1)
         sig2 = sign(c, ksign2)
@@ -207,9 +212,9 @@ rule client_reconstruct_phase2:
     in 
     [
       Client_2($cid, ~pw, $sid1, $sid2, $sid3, ~b)
-    , SCClientIn($cid, $sid1, mul('empty' ++ ~b ++ koprf1, hpw))
-    , SCClientIn($cid, $sid2, mul('empty' ++ ~b ++ koprf2, hpw))
-    , SCClientIn($cid, $sid3, mul('empty' ++ ~b ++ koprf3, hpw))
+    , SCClientIn($cid, $sid1, mul(~b ++ koprf1, hpw))
+    , SCClientIn($cid, $sid2, mul(~b ++ koprf2, hpw))
+    , SCClientIn($cid, $sid3, mul(~b ++ koprf3, hpw))
     ]
   --[
       ClientReconstructPhase2($cid, ~pw)
@@ -278,11 +283,12 @@ lemma types [sources]:
       ( (Ex #j. SourceC(msg)@#j & #j < #i)
       | (Ex #j. !KU(msg)@#j & #j < #i)
       )
-    ) & (All msg #i.
-      SourcesExtract(msg)@#i
+    ) & (All factor msg #i.
+      SourcesExtract(mul(factor, msg))@#i
       ==>
       ( (Ex #j. SourceT(msg)@#j & #j < #i)
       | (Ex #j. !KU(msg)@#j & #j < #i)
+      | (Ex other_factors #j. !KU(mul(factor ++ other_factors, msg))@#j & #j < #i)
       )
     )
     "
