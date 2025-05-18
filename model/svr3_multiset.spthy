@@ -25,18 +25,6 @@ theory SVR3
 
 
 
-
-
-//
-//
-// INCORRECT MODEL, CAREFUL
-//
-//
-
-
-
-
-
 begin
 
 builtins: xor, hashing, symmetric-encryption, signing, multiset
@@ -78,7 +66,12 @@ rule combine[no_derivcheck]:
   --[ ]->
     [ Out(mul(a ++ b, x)) ]
 
-rule reduce[no_derivcheck]:
+rule add[no_derivcheck]:
+    [ In(a), In(mul(b, x)) ]
+  --[]->
+    [ Out(mul(a ++ b, x)) ]
+
+rule remove[no_derivcheck]:
     [ In(a), In(mul(a ++ b, x)) ]
   --[]->
     [ Out(mul(b, x)) ]
@@ -186,10 +179,10 @@ rule server_reconstruct_phase1:
     ]
   --[
       ServerReconstructPhase1($sid)
-    , SourceC(mul(factors ++ koprf_share, bhpw))
+    , SourceC(mul(factors ++ koprf_share, hpw))
     ]->
     [
-      SCServerOut($client, $sid, mul(factors ++ koprf_share, bhpw))
+      SCServerOut($client, $sid, mul(factors ++ koprf_share, hpw))
     , Server_2($sid, $cid, s_enc_share, kvfy, bhpw)
     ]
 
@@ -288,7 +281,7 @@ lemma types [sources]:
       ==>
       ( (Ex #j. SourceT(msg)@#j & #j < #i)
       | (Ex #j. !KU(msg)@#j & #j < #i)
-      | (Ex other_factors #j. !KU(mul(factor ++ other_factors, msg))@#j & #j < #i)
+      //| (Ex other_factors #j. !KU(mul(factor ++ other_factors, msg))@#j & #j < #i)
       )
     )
     "
