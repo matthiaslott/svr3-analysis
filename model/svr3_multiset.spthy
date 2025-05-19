@@ -63,22 +63,22 @@ rule compromise_server:
 // 
 rule combine[no_derivcheck]:
     [ In(mul(a, x)), In(mul(b, x)) ]
-  --[ ]->
+  --[ SourcesMul(mul('f', x)) ]->
     [ Out(mul(a ++ b, x)) ]
 
 rule add[no_derivcheck]:
     [ In(a), In(mul(b, x)) ]
-  --[]->
+  --[ SourcesMul(mul('f', x)) ]->
     [ Out(mul(a ++ b, x)) ]
 
 rule remove[no_derivcheck]:
     [ In(a), In(mul(a ++ b, x)) ]
-  --[]->
+  --[ SourcesMul(mul('f', x)) ]->
     [ Out(mul(b, x)) ]
 
 rule extract[no_derivcheck]:
     [ In(a), In(mul(a, x)) ]
-  --[ SourcesExtract(mul(a, x)) ]->
+  --[ SourcesMul(mul('f', x)) ]->
     [ Out(x) ]
 
 // Protocol
@@ -180,6 +180,7 @@ rule server_reconstruct_phase1:
   --[
       ServerReconstructPhase1($sid)
     , SourceC(mul(factors ++ koprf_share, hpw))
+    , SourcesMul(mul('f', hpw)) // The factor of the multiplication doesn't matter at all
     ]->
     [
       SCServerOut($client, $sid, mul(factors ++ koprf_share, hpw))
@@ -229,6 +230,7 @@ rule server_reconstruct_phase2:
     ]
   --[
       _restrict(verify(sig, c, kvfy) = true)
+    , SourcesMul(s_enc_share)
     ]->
     [
       SCServerOut($client, $sid, s_enc_share)
@@ -263,12 +265,9 @@ rule client_reconstruct_finish:
 // But:
 // - Out comes from !SCServerKnows
 // - !SCServerKnows comes from SCServerOut
-// - SCServerOut comes from various protocol rules, but all the data came in via SCServerIn
-// - SCServerIn comes from !SCClientKnows
-// - !SCClientKnows comes from SCClientOut
-// - SCClientOut comes from various protocol rules or from adversary_send
-// - All this boils down to the initial koprf and s_enc shares
+// - SCServerOut comes from various protocol rules
 
+// SourcesMul is like an invariant that says: If we have a multiplication, the point that is either h(pw) or the adversary knows it.
 lemma types [sources]:
     "(All msg #i.
       SourcesAdversaryRecv(msg)@#i
@@ -276,12 +275,11 @@ lemma types [sources]:
       ( (Ex #j. SourceC(msg)@#j & #j < #i)
       | (Ex #j. !KU(msg)@#j & #j < #i)
       )
-    ) & (All factor msg #i.
-      SourcesExtract(mul(factor, msg))@#i
+    ) & (All a x #i.
+      SourcesMul(mul(a, x))@#i
       ==>
-      ( (Ex #j. SourceT(msg)@#j & #j < #i)
-      | (Ex #j. !KU(msg)@#j & #j < #i)
-      //| (Ex other_factors #j. !KU(mul(factor ++ other_factors, msg))@#j & #j < #i)
+      ( (Ex #j. SourceT(x)@#j & #j < #i)
+      | (Ex #j. !KU(x)@#j & #j < #i)
       )
     )
     "
