@@ -1,4 +1,4 @@
-theory SVR3
+theory SVR3_Multiset
 
 // Models a simpler underapproximation of the SVR3 protocol:
 // - No key rotation is modelled
@@ -15,13 +15,11 @@ theory SVR3
 // - Server compromise: Observe all the secrets that were stored on the server as well as send/receive messages on its behalf
 // - Access to client identifiers due to compromise of authentication server
 // - Interact with the servers on its own.
-// - Access to Quantum Computer that solves DLOG. Not modelled yet because simpler protocol doesn't use DLOGs.
+// - Access to Quantum Computer that solves DLOG.
 
 
 // Issues/Todos:
-// - Better T-OPRF model (to keep koprf secure)
 // - Bruteforce attack to let "normal" adversary obtain pw
-// - PQ behaviour to allow PQ attack on koprf and Kauth
 
 
 
@@ -44,9 +42,7 @@ functions:
 // World Building
 rule create_server:
     []
-  --[
-      ServerCreate($sid) // TODO: Consider Removing
-    ]->
+  --[]->
     [ !Server($sid) ]
 
 
@@ -54,32 +50,42 @@ rule create_server:
 
 rule compromise_server:
     [ !Server($sid) ]
-  --[
-      AdversaryAction()
-    , !Compromised($sid)
-    ]->
+  --[ AdversaryAction()
+    , !Compromised($sid) ]->
     [ !Compromised($sid) ]
 
 // 
 rule combine[no_derivcheck]:
     [ In(mul(a, x)), In(mul(b, x)) ]
-  --[ SourcesMul(mul('f', x)) ]->
+  --[ AdversaryAction()
+    , SourcesPoint(x) ]->
     [ Out(mul(a ++ b, x)) ]
 
 rule add[no_derivcheck]:
     [ In(a), In(mul(b, x)) ]
-  --[ SourcesMul(mul('f', x)) ]->
+  --[ AdversaryAction()
+    , SourcesPoint(x) ]->
     [ Out(mul(a ++ b, x)) ]
 
 rule remove[no_derivcheck]:
     [ In(a), In(mul(a ++ b, x)) ]
-  --[ SourcesMul(mul('f', x)) ]->
+  --[ AdversaryAction()
+    , SourcesPoint(x) ]->
     [ Out(mul(b, x)) ]
 
 rule extract[no_derivcheck]:
     [ In(a), In(mul(a, x)) ]
-  --[ SourcesMul(mul('f', x)) ]->
+  --[ AdversaryAction()
+    , SourcesPoint(x) ]->
     [ Out(x) ]
+
+rule solve_dlog[no_derivcheck]:
+    [ In(mul(a, x)), !Factor(f) ]
+  --[ _restrict(f << a | f = a)
+    , AdversaryAction()
+    , PQAdversaryAction()
+    , SourcesFactor(f) ]->
+    [ Out(f) ]
 
 // Protocol
 // Initialisation of the client with password and secret to be protected.
@@ -123,7 +129,8 @@ rule client_register:
       _restrict(DISTINCT($sid1, $sid2, $sid3))
     , ClientRegister($cid, ~pw, ~secret)
     , SourceC(~s_enc1), SourceC(~s_enc2), SourceC(~s_enc3)
-    , SourceT(h(~pw))
+    , SourceP(h(~pw))
+    , SourceF(~koprf1), SourceF(~koprf2), SourceF(~koprf3)
     , Secret('koprf', koprf, $cid, $sid1, $sid2, $sid3)
     , Secret('kauth', kauth, $cid, $sid1, $sid2, $sid3)
     , Secret('kenc', kenc, $cid, $sid1, $sid2, $sid3)
@@ -144,7 +151,7 @@ rule server_register:
     , SCServerIn($client, $sid, <$cid, koprf_share, s_enc_share, kvfy>) // Note: $client and $cid don't necessarily match because the client isn't authenticated.
     ]
   --[
-      //ServerInitialise($sid, $cid, koprf_share, s_enc_share, kvfy)
+      ServerAction()
     ]->
     [
       !Server_1($sid, $cid, koprf_share, s_enc_share, kvfy)
@@ -160,12 +167,14 @@ rule client_reconstruct_phase1:
     ]
   --[
       ClientReconstructPhase1($cid, ~pw)
+    , SourceF(~b)
     ]->
     [ 
       SCClientOut($cid, $sid1, <$cid, mul(~b, h(~pw))>)
     , SCClientOut($cid, $sid2, <$cid, mul(~b, h(~pw))>)
     , SCClientOut($cid, $sid3, <$cid, mul(~b, h(~pw))>)
     , Client_2($cid, ~pw, $sid1, $sid2, $sid3, ~b)
+    , !Factor(~b)
     ]
 
     
@@ -178,13 +187,15 @@ rule server_reconstruct_phase1:
     , SCServerIn($client, $sid, <$cid, bhpw>) // Note: $client and $cid don't necessarily match because the client isn't authenticated.
     ]
   --[
-      ServerReconstructPhase1($sid)
+      ServerAction()
+    , ServerReconstructPhase1($sid)
     , SourceC(mul(factors ++ koprf_share, hpw))
-    , SourcesMul(mul('f', hpw)) // The factor of the multiplication doesn't matter at all
+    , SourcesPoint(hpw)
     ]->
     [
       SCServerOut($client, $sid, mul(factors ++ koprf_share, hpw))
     , Server_2($sid, $cid, s_enc_share, kvfy, bhpw)
+    , !Factor(koprf_share)
     ]
 
 
@@ -230,7 +241,7 @@ rule server_reconstruct_phase2:
     ]
   --[
       _restrict(verify(sig, c, kvfy) = true)
-    , SourcesMul(s_enc_share)
+    , ServerAction()
     ]->
     [
       SCServerOut($client, $sid, s_enc_share)
@@ -259,6 +270,9 @@ rule client_reconstruct_finish:
 //restriction OnlyOnce:
 //    "All #i #j v. OnlyOnce(v)@#i & OnlyOnce(v)@#j ==> #i = #j"
 
+restriction servers_offline:
+    "All #i #j. PQAdversaryAction()@#i & ServerAction()@#j ==> #j < #i"
+
 // Sources lemma:
 // There are 22 partial deconstructions because of adversary_recv.
 // Tamarin believes any msg can be derived using that rule.
@@ -267,7 +281,7 @@ rule client_reconstruct_finish:
 // - !SCServerKnows comes from SCServerOut
 // - SCServerOut comes from various protocol rules
 
-// SourcesMul is like an invariant that says: If we have a multiplication, the point that is either h(pw) or the adversary knows it.
+// SourcesPoint is like an invariant that says: The point is either h(pw) or the adversary knows it.
 lemma types [sources]:
     "(All msg #i.
       SourcesAdversaryRecv(msg)@#i
@@ -275,11 +289,17 @@ lemma types [sources]:
       ( (Ex #j. SourceC(msg)@#j & #j < #i)
       | (Ex #j. !KU(msg)@#j & #j < #i)
       )
-    ) & (All a x #i.
-      SourcesMul(mul(a, x))@#i
+    ) & (All x #i.
+      SourcesPoint(x)@#i
       ==>
-      ( (Ex #j. SourceT(x)@#j & #j < #i)
+      ( (Ex #j. SourceP(x)@#j & #j < #i)
       | (Ex #j. !KU(x)@#j & #j < #i)
+      )
+    ) & (All a #i.
+      SourcesFactor(a)@#i
+      ==>
+      ( (Ex #j. SourceF(a)@#j & #j < #i)
+      | (Ex #j. !KU(a)@#j & #j < #i)
       )
     )
     "
@@ -306,19 +326,35 @@ lemma executability:
       )
     "
 
-lemma secret_koprf:
+lemma secret_koprf_pre_quantum:
+    "All koprf cid sid1 sid2 sid3 #i. Secret('koprf', koprf, cid, sid1, sid2, sid3)@#i
+      ==> (not Ex #j. K(koprf)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
+
+lemma secret_kauth_pre_quantum:
+    "All kauth cid sid1 sid2 sid3 #i. Secret('kauth', kauth, cid, sid1, sid2, sid3)@#i
+      ==> (not Ex #j. K(kauth)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
+
+lemma secret_kenc_pre_quantum:
+    "All kenc cid sid1 sid2 sid3 #i. Secret('kenc', kenc, cid, sid1, sid2, sid3)@#i
+      ==> (not Ex #j. K(kenc)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
+
+lemma secret_secret_pre_quantum:
+    "All secret cid sid1 sid2 sid3 #i. Secret('secret', secret, cid, sid1, sid2, sid3)@#i
+      ==> (not Ex #j. K(secret)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
+
+lemma secret_koprf_post_quantum:
     "All koprf cid sid1 sid2 sid3 #i. Secret('koprf', koprf, cid, sid1, sid2, sid3)@#i
       ==> (not Ex #j. K(koprf)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
-lemma secret_kauth:
+lemma secret_kauth_post_quantum:
     "All kauth cid sid1 sid2 sid3 #i. Secret('kauth', kauth, cid, sid1, sid2, sid3)@#i
       ==> (not Ex #j. K(kauth)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
-lemma secret_kenc:
+lemma secret_kenc_post_quantum:
     "All kenc cid sid1 sid2 sid3 #i. Secret('kenc', kenc, cid, sid1, sid2, sid3)@#i
       ==> (not Ex #j. K(kenc)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
-lemma secret_secret:
+lemma secret_secret_post_quantum:
     "All secret cid sid1 sid2 sid3 #i. Secret('secret', secret, cid, sid1, sid2, sid3)@#i
       ==> (not Ex #j. K(secret)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
