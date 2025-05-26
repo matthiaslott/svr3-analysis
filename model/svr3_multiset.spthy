@@ -80,9 +80,8 @@ rule extract[no_derivcheck]:
     [ Out(x) ]
 
 rule solve_dlog[no_derivcheck]:
-    [ In(mul(a, x)), !Factor(f) ]
-  --[ _restrict(f << a | f = a)
-    , AdversaryAction()
+    [ !Factor(f) ]
+  --[ AdversaryAction()
     , PQAdversaryAction()
     , SourcesFactor(f) ]->
     [ Out(f) ]
@@ -274,6 +273,7 @@ restriction servers_offline:
     "All #i #j. PQAdversaryAction()@#i & ServerAction()@#j ==> #j < #i"
 
 // Sources lemma:
+
 // There are 22 partial deconstructions because of adversary_recv.
 // Tamarin believes any msg can be derived using that rule.
 // But:
