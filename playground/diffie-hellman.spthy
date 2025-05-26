@@ -1,0 +1,11 @@
+theory DiffieHellpme
+
+begin
+
+builtins: diffie-hellman
+
+rule test:
+    [ In(g^x), In(g) ]
+  --[]->
+    [ Out(x) ]
+end

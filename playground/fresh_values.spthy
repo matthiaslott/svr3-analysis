@@ -1,0 +1,15 @@
+theory Fresh_Values
+
+begin
+
+rule Source1:
+    [ Fr(~v) ]--[ Source1(~v) ]->[ !Factor(~v) ]
+
+rule Source2: 
+    [ Fr(~v) ]--[ Source2(~v) ]->[ Out(~v) ]
+
+lemma multiple_sources:
+    exists-trace "
+        Ex v #i #j. Source1(v)@#i & Source2(v)@#j
+    "
+end
