@@ -1,0 +1,18 @@
+// Sources Lemma
+tactic: sources
+
+// First part: Secure Channel
+prio:
+    isFactName "SCServerIn" & regex ", msg, "
+
+// Second part: Point
+// Prioritise induction hypothesis specifying how point x looks like
+prio:
+    regex "SourceP\( x"
+// Prioritise finding out more about variable t
+prio:
+    isFactName "SCServerIn" & regex ", t, "
+
+// Third part: Factors
+prio:
+    isFactName "SCServerIn" & regex ", a, "

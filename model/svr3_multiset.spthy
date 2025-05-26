@@ -39,7 +39,11 @@ functions:
 // uses: !Server, !Compromised
 #include "src/securechannel.spthy"
 
+// Proof automation:
+#include "./tactics"
+
 // World Building
+
 rule create_server:
     []
   --[]->
@@ -48,60 +52,57 @@ rule create_server:
 
 // Adversary Capabilities
 
-rule compromise_server:
+rule compromise_server[color=#d66f7c]:
     [ !Server($sid) ]
   --[ AdversaryAction()
     , !Compromised($sid) ]->
     [ !Compromised($sid) ]
 
 // 
-rule combine[no_derivcheck]:
+rule combine[no_derivcheck, color=#d66f7c]:
     [ In(mul(a, x)), In(mul(b, x)) ]
   --[ AdversaryAction()
     , SourcesPoint(x) ]->
     [ Out(mul(a ++ b, x)) ]
 
-rule add[no_derivcheck]:
+rule add[no_derivcheck, color=#d66f7c]:
     [ In(a), In(mul(b, x)) ]
   --[ AdversaryAction()
     , SourcesPoint(x) ]->
     [ Out(mul(a ++ b, x)) ]
 
-rule remove[no_derivcheck]:
+rule remove[no_derivcheck, color=#d66f7c]:
     [ In(a), In(mul(a ++ b, x)) ]
   --[ AdversaryAction()
     , SourcesPoint(x) ]->
     [ Out(mul(b, x)) ]
 
-rule extract[no_derivcheck]:
+rule extract[no_derivcheck, color=#d66f7c]:
     [ In(a), In(mul(a, x)) ]
   --[ AdversaryAction()
     , SourcesPoint(x) ]->
     [ Out(x) ]
 
-rule solve_dlog[no_derivcheck]:
+rule solve_dlog[no_derivcheck, color=#d66f7c]:
     [ !Factor(f) ]
   --[ AdversaryAction()
     , PQAdversaryAction()
     , SourcesFactor(f) ]->
     [ Out(f) ]
 
+
 // Protocol
 // Initialisation of the client with password and secret to be protected.
 // Each client can store and register multiple secrets. Nondeterminism ensures that it is possible to get the right responses back from the servers.
-rule client_initialise:
-    [
-      Fr(~pw), Fr(~secret)
-    ]
+rule client_initialise[color=#77b58d]:
+    [ Fr(~pw), Fr(~secret) ]
   --[
       _restrict(NEQ($cid, 'adv')) // The adversary may contact the servers, but can't operate as its own client. Without this restriction, it would be as if the adversary could compromise 1 client.
     ]->
-    [
-      Client_0($cid, ~pw, ~secret)
-    ]
+    [ Client_0($cid, ~pw, ~secret) ]
 
 // Client Registration    
-rule client_register:
+rule client_register[color=#77b58d]:
     let
         koprf = ~koprf1 ++ ~koprf2 ++ ~koprf3
         s_enc = ~s_enc1 XOR ~s_enc2 XOR ~s_enc3
@@ -118,14 +119,11 @@ rule client_register:
         // Furthermore, this only weakens the client, as he doesn't work with Tamarin and no longer knows if decryption was successful.
         encrypted_secret = senc(~secret, kenc)  
     in
-    [
-      Client_0($cid, ~pw, ~secret)
+    [ Client_0($cid, ~pw, ~secret)
     , Fr(~koprf1), Fr(~koprf2), Fr(~koprf3)
     , Fr(~s_enc1), Fr(~s_enc2), Fr(~s_enc3)
-    , !Server($sid1), !Server($sid2), !Server($sid3)
-    ]
-  --[
-      _restrict(DISTINCT($sid1, $sid2, $sid3))
+    , !Server($sid1), !Server($sid2), !Server($sid3) ]
+  --[ _restrict(DISTINCT($sid1, $sid2, $sid3))
     , ClientRegister($cid, ~pw, ~secret)
     , SourceC(~s_enc1), SourceC(~s_enc2), SourceC(~s_enc3)
     , SourceP(h(~pw))
@@ -133,10 +131,8 @@ rule client_register:
     , Secret('koprf', koprf, $cid, $sid1, $sid2, $sid3)
     , Secret('kauth', kauth, $cid, $sid1, $sid2, $sid3)
     , Secret('kenc', kenc, $cid, $sid1, $sid2, $sid3)
-    , Secret('secret', ~secret, $cid, $sid1, $sid2, $sid3)
-    ]->
-    [ 
-      Out(encrypted_secret) // Q: should this be annotated with $cid? IMO not needed as long as we don't strive for success guarantees
+    , Secret('secret', ~secret, $cid, $sid1, $sid2, $sid3) ]->
+    [ Out(encrypted_secret) // Q: should this be annotated with $cid? IMO not needed as long as we don't strive for success guarantees
     , SCClientOut($cid, $sid1, <$cid, ~koprf1, ~s_enc1, kvfy1>)
     , SCClientOut($cid, $sid2, <$cid, ~koprf2, ~s_enc2, kvfy2>)
     , SCClientOut($cid, $sid3, <$cid, ~koprf3, ~s_enc3, kvfy3>)
@@ -144,64 +140,48 @@ rule client_register:
     ]
 
 // Server Registration
-rule server_register:
-    [
-      !Server($sid)
+rule server_register[color=#7793b5]:
+    [ !Server($sid)
     , SCServerIn($client, $sid, <$cid, koprf_share, s_enc_share, kvfy>) // Note: $client and $cid don't necessarily match because the client isn't authenticated.
     ]
-  --[
-      ServerAction()
-    ]->
-    [
-      !Server_1($sid, $cid, koprf_share, s_enc_share, kvfy)
-    ]
-
+  --[ ServerAction() ]->
+    [ !Server_1($sid, $cid, koprf_share, s_enc_share, kvfy) ]
 
 
 // Client Reconstruction (Phase 1)
-rule client_reconstruct_phase1:
-    [
-      !Client_1($cid, ~pw, $sid1, $sid2, $sid3)
-    , Fr(~b)
-    ]
-  --[
-      ClientReconstructPhase1($cid, ~pw)
-    , SourceF(~b)
-    ]->
-    [ 
-      SCClientOut($cid, $sid1, <$cid, mul(~b, h(~pw))>)
+rule client_reconstruct_phase1[color=#77b58d]:
+    [ !Client_1($cid, ~pw, $sid1, $sid2, $sid3)
+    , Fr(~b) ]
+  --[ ClientReconstructPhase1($cid, ~pw)
+    , SourceF(~b) ]->
+    [ SCClientOut($cid, $sid1, <$cid, mul(~b, h(~pw))>)
     , SCClientOut($cid, $sid2, <$cid, mul(~b, h(~pw))>)
     , SCClientOut($cid, $sid3, <$cid, mul(~b, h(~pw))>)
     , Client_2($cid, ~pw, $sid1, $sid2, $sid3, ~b)
-    , !Factor(~b)
-    ]
+    , !Factor(~b) ]
 
-    
-rule server_reconstruct_phase1:
+// PATTERN MATCHING TO:
+// - scalar multiplication with koprf_share
+rule server_reconstruct_phase1[no_derivcheck, color=#7793b5]:
     let
       bhpw = mul(factors, hpw)
     in
-    [
-      !Server_1($sid, $cid, koprf_share, s_enc_share, kvfy)
+    [ !Server_1($sid, $cid, koprf_share, s_enc_share, kvfy)
     , SCServerIn($client, $sid, <$cid, bhpw>) // Note: $client and $cid don't necessarily match because the client isn't authenticated.
     ]
-  --[
-      ServerAction()
+  --[ ServerAction()
     , ServerReconstructPhase1($sid)
     , SourceC(mul(factors ++ koprf_share, hpw))
-    , SourcesPoint(hpw)
-    ]->
-    [
-      SCServerOut($client, $sid, mul(factors ++ koprf_share, hpw))
+    , SourcesPoint(hpw) ]->
+    [ SCServerOut($client, $sid, mul(factors ++ koprf_share, hpw))
     , Server_2($sid, $cid, s_enc_share, kvfy, bhpw)
-    , !Factor(koprf_share)
-    ]
+    , !Factor(koprf_share) ]
 
 
 // PATTERN MATCHING TO:
 // - deblind with ~b (uses commutativity)
 // - combine the shares
-rule client_reconstruct_phase2:
+rule client_reconstruct_phase2[no_derivcheck, color=#77b58d]:
     let
         koprf = koprf1 ++ koprf2 ++ koprf3
         kauth = h(<~pw, mul(koprf, hpw)>)
@@ -214,63 +194,46 @@ rule client_reconstruct_phase2:
         sig2 = sign(c, ksign2)
         sig3 = sign(c, ksign3)
     in 
-    [
-      Client_2($cid, ~pw, $sid1, $sid2, $sid3, ~b)
+    [ Client_2($cid, ~pw, $sid1, $sid2, $sid3, ~b)
     , SCClientIn($cid, $sid1, mul(~b ++ koprf1, hpw))
     , SCClientIn($cid, $sid2, mul(~b ++ koprf2, hpw))
-    , SCClientIn($cid, $sid3, mul(~b ++ koprf3, hpw))
-    ]
-  --[
-      ClientReconstructPhase2($cid, ~pw)
-    ]->
-    [
-      SCClientOut($cid, $sid1, sig1)
+    , SCClientIn($cid, $sid3, mul(~b ++ koprf3, hpw)) ]
+  --[ ClientReconstructPhase2($cid, ~pw) ]->
+    [ SCClientOut($cid, $sid1, sig1)
     , SCClientOut($cid, $sid2, sig2)
     , SCClientOut($cid, $sid3, sig3)
-    , Client_3($cid, ~pw, kauth, $sid1, $sid2, $sid3)
-    ]
+    , Client_3($cid, ~pw, kauth, $sid1, $sid2, $sid3) ]
     
-rule server_reconstruct_phase2:
+rule server_reconstruct_phase2[color=#7793b5]:
     let
         c = h(bhpw) // Change if Noise.ExportedAuthenticator is modelled!
     in
-    [
-      Server_2($sid, $cid, s_enc_share, kvfy, bhpw)
+    [ Server_2($sid, $cid, s_enc_share, kvfy, bhpw)
     , SCServerIn($client, $sid, sig) // Note: $client and $cid don't necessarily match because the client isn't authenticated.
     ]
-  --[
-      _restrict(verify(sig, c, kvfy) = true)
-    , ServerAction()
-    ]->
-    [
-      SCServerOut($client, $sid, s_enc_share)
-    ]
+  --[ _restrict(verify(sig, c, kvfy) = true)
+    , ServerAction() ]->
+    [ SCServerOut($client, $sid, s_enc_share) ]
 
 
-rule client_reconstruct_finish:
+rule client_reconstruct_finish[color=#77b58d]:
     let
         s_enc = s_enc1 XOR s_enc2 XOR s_enc3
         kenc = KDF(s_enc, kauth)
         secret = sdec(encrypted_secret, kenc)
     in
-    [ 
-      Client_3($cid, ~pw, kauth, $sid1, $sid2, $sid3)
+    [ Client_3($cid, ~pw, kauth, $sid1, $sid2, $sid3)
     , SCClientIn($cid, $sid1, s_enc1)
     , SCClientIn($cid, $sid2, s_enc2)
     , SCClientIn($cid, $sid3, s_enc3)
-    , In(encrypted_secret)
-    ]
-  --[
-      ClientReconstructFinish($cid, ~pw, secret)
-    ]->
+    , In(encrypted_secret) ]
+  --[ ClientReconstructFinish($cid, ~pw, secret) ]->
     []
 
 
-//restriction OnlyOnce:
-//    "All #i #j v. OnlyOnce(v)@#i & OnlyOnce(v)@#j ==> #i = #j"
-
 restriction servers_offline:
     "All #i #j. PQAdversaryAction()@#i & ServerAction()@#j ==> #j < #i"
+
 
 // Sources lemma:
 
@@ -282,7 +245,7 @@ restriction servers_offline:
 // - SCServerOut comes from various protocol rules
 
 // SourcesPoint is like an invariant that says: The point is either h(pw) or the adversary knows it.
-lemma types [sources]:
+lemma types [sources, heuristic={sources}]:
     "(All msg #i.
       SourcesAdversaryRecv(msg)@#i
       ==>
