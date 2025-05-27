@@ -1,0 +1,3777 @@
+theory SVR3_Bruteforce2 begin
+
+// Function signature and definition of the equational theory E
+
+builtins: multiset, xor
+functions: KDF/2, fst/1, h/1, mul/2, pair/2, pk/1, sdec/2, senc/2,
+           sign/2, snd/1, true/0, verify/3
+equations:
+    fst(<x.1, x.2>) = x.1,
+    sdec(senc(x.1, x.2), x.2) = x.1,
+    snd(<x.1, x.2>) = x.2,
+    verify(sign(x.1, x.2), x.1, pk(x.2)) = true
+
+tactic: sources
+presort: s
+prio: {id}
+  isFactName"SCServerIn" & regex",msg,"
+prio: {id}
+  regex"SourceP\(x"
+prio: {id}
+  isFactName"SCServerIn" & regex",t,"
+prio: {id}
+  isFactName"SCServerIn" & regex",a,"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+predicate: NEQ( x, y )<=>¬(x = y)
+
+predicate: DISTINCT( x, y, z )<=>¬(((x = y) ∨ (x = z)) ∨ (y = z))
+
+rule (modulo E) client_out[color=#ffffff]:
+   [ SCClientOut( $client, $server, msg ) ]
+  -->
+   [ !SCClientKnows( $client, $server, msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) server_in[color=#ffffff]:
+   [ !SCClientKnows( $client, $server, msg ) ]
+  -->
+   [ SCServerIn( $client, $server, msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) server_out[color=#ffffff]:
+   [ SCServerOut( $client, $server, msg ) ]
+  -->
+   [ !SCServerKnows( $client, $server, msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) client_in[color=#ffffff]:
+   [ !SCServerKnows( $client, $server, msg ) ]
+  -->
+   [ SCClientIn( $client, $server, msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) eavesdrop_server[color=#e0afb5]:
+   [ !SCClientKnows( $client, $server, msg ), !Compromised( $server )
+   ]
+  --[ AdversaryAction( ) ]->
+   [ Out( msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) impersonate_server[color=#e0afb5]:
+   [ In( msg ), !Compromised( $server ) ]
+  --[ AdversaryAction( ) ]->
+   [ SCServerOut( $client, $server, msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) adversary_send[color=#e0afb5]:
+   [ In( msg ), !Server( $server ) ]
+  --[ AdversaryAction( ) ]->
+   [ SCClientOut( 'adv', $server, msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) adversary_recv[color=#e0afb5]:
+   [ !SCServerKnows( 'adv', $server, msg ) ]
+  --[ AdversaryAction( ), SourcesAdversaryRecv( msg ) ]->
+   [ Out( msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) create_server:
+   [ ] --> [ !Server( $sid ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) compromise_server[color=#d66f7c]:
+   [ !Server( $sid ) ]
+  --[ AdversaryAction( ), !Compromised( $sid ) ]->
+   [ !Compromised( $sid ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) combine[derivchecks, color=#d66f7c]:
+   [ In( mul(a, x) ), In( mul(b, x) ) ]
+  --[ AdversaryAction( ), SourcesPoint( x ) ]->
+   [ Out( mul((a++b), x) ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) add[derivchecks, color=#d66f7c]:
+   [ In( a ), In( mul(b, x) ) ]
+  --[ AdversaryAction( ), SourcesPoint( x ) ]->
+   [ Out( mul((a++b), x) ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) remove[derivchecks, color=#d66f7c]:
+   [ In( a ), In( mul((a++b), x) ) ]
+  --[ AdversaryAction( ), SourcesPoint( x ) ]->
+   [ Out( mul(b, x) ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) extract[derivchecks, color=#d66f7c]:
+   [ In( a ), In( mul(a, x) ) ]
+  --[ AdversaryAction( ), SourcesPoint( x ) ]->
+   [ Out( x ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) solve_dlog[derivchecks, color=#d66f7c]:
+   [ !Factor( f ) ]
+  --[ AdversaryAction( ), PQAdversaryAction( ), SourcesFactor( f )
+  ]->
+   [ Out( f ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) leak_value:
+   [ !HumanGenerated( v ) ] --> [ !Leak( v ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) weak_value:
+   [ In( v ) ] --> [ !Weak( v ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) leak_weak:
+   [ !Leak( v ) ] --> [ !Weak( v ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) weak_pair:
+   [ !Weak( x ), !Weak( y ) ] --> [ !Leak( <x, y> ) ]
+
+  // loop breakers: [0,1]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) weak_xor:
+   [ !Weak( x ), !Weak( y ) ] --> [ !Leak( (x⊕y) ) ]
+
+  // loop breakers: [0,1]
+  /*
+  rule (modulo AC) weak_xor:
+     [ !Weak( x ), !Weak( y ) ] --> [ !Leak( z ) ]
+    variants (modulo AC)
+    1. x     = x.4
+       y     = x.4
+       z     = zero
+    
+    2. x     = x.4
+       y     = y.4
+       z     = (x.4⊕y.4)
+    
+    3. x     = x.4
+       y     = zero
+       z     = x.4
+    
+    4. x     = x.4
+       y     = (x.4⊕x.5)
+       z     = x.5
+    
+    5. x     = zero
+       y     = y.4
+       z     = y.4
+    
+    6. x     = (x.4⊕x.5)
+       y     = x.5
+       z     = x.4
+    
+    7. x     = (x.4⊕x.5)
+       y     = (x.4⊕x.6)
+       z     = (x.5⊕x.6)
+    // loop breakers: [0,1]
+  */
+
+rule (modulo E) weak_hash:
+   [ !Weak( x ) ] --> [ !Leak( h(x) ) ]
+
+  // loop breaker: [0]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) weak_senc:
+   [ !Weak( m ), !Weak( k ) ] --> [ !Leak( senc(m, k) ) ]
+
+  // loop breakers: [0,1]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) weak_sdec:
+   [ !Weak( c ), !Weak( k ) ] --> [ !Leak( sdec(c, k) ) ]
+
+  // loop breakers: [0,1]
+  /*
+  rule (modulo AC) weak_sdec:
+     [ !Weak( c ), !Weak( k ) ] --> [ !Leak( z ) ]
+    variants (modulo AC)
+    1. c     = c.4
+       k     = k.4
+       z     = sdec(c.4, k.4)
+    
+    2. c     = senc(x.4, x.5)
+       k     = x.5
+       z     = x.4
+    // loop breakers: [0,1]
+  */
+
+rule (modulo E) weak_sign:
+   [ !Weak( m ), !Weak( k ) ] --> [ !Leak( sign(m, k) ) ]
+
+  // loop breakers: [0,1]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) weak_verify:
+   [ !Weak( s ), !Weak( m ), !Weak( k ) ]
+  -->
+   [ !Leak( verify(s, m, k) ) ]
+
+  // loop breakers: [0,1,2]
+  /*
+  rule (modulo AC) weak_verify:
+     [ !Weak( s ), !Weak( m ), !Weak( k ) ] --> [ !Leak( z ) ]
+    variants (modulo AC)
+    1. k     = k.5
+       m     = m.5
+       s     = s.5
+       z     = verify(s.5, m.5, k.5)
+    
+    2. k     = pk(x.5)
+       m     = x.6
+       s     = sign(x.6, x.5)
+       z     = true
+    // loop breakers: [0,1,2]
+  */
+
+rule (modulo E) weak_pk:
+   [ !Weak( k ) ] --> [ !Leak( pk(k) ) ]
+
+  // loop breaker: [0]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) weak_concat:
+   [ !Weak( x ), !Weak( y ) ] --> [ !Leak( (x++y) ) ]
+
+  // loop breakers: [0,1]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) weak_mul:
+   [ !Weak( f ), !Weak( x ) ] --> [ !Leak( mul(f, x) ) ]
+
+  // loop breakers: [0,1]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) weak_kdf:
+   [ !Weak( x ), !Weak( y ) ] --> [ !Leak( KDF(x, y) ) ]
+
+  // loop breakers: [0,1]
+  /* has exactly the trivial AC variant */
+
+restriction Restr_leak_1:
+  "∀ x #NOW x.1. (Restr_leak_1( x, x.1 ) @ #NOW) ⇒ (x ⊏ x.1)"
+  // safety formula
+
+rule (modulo E) leak:
+   [ !HumanGenerated( x ), In( y ), !Leak( y ) ]
+  --[ AdversaryAction( ), Restr_leak_1( x, y ) ]->
+   [ Out( x ) ]
+
+  /* has exactly the trivial AC variant */
+
+restriction Restr_client_initialise_1:
+  "∀ x #NOW.
+    (Restr_client_initialise_1( x ) @ #NOW) ⇒ (¬(x = 'adv'))"
+  // safety formula
+
+rule (modulo E) client_initialise[color=#77b58d]:
+   [ Fr( ~pw ), Fr( ~secret ) ]
+  --[ Restr_client_initialise_1( $cid ) ]->
+   [ Client_0( $cid, ~pw, ~secret ), !HumanGenerated( ~pw ) ]
+
+  /* has exactly the trivial AC variant */
+
+restriction Restr_client_register_1:
+  "∀ x #NOW x.1 x.2 x.3 x.4 x.5.
+    (Restr_client_register_1( x, x.1, x.2, x.3, x.4, x.5 ) @ #NOW) ⇒
+    (¬(((x = x.1) ∨ (x.2 = x.3)) ∨ (x.4 = x.5)))"
+  // safety formula
+
+rule (modulo E) client_register[color=#77b58d]:
+   [
+   Client_0( $cid, ~pw, ~secret ), Fr( ~koprf1 ), Fr( ~koprf2 ),
+   Fr( ~koprf3 ), Fr( ~s_enc1 ), Fr( ~s_enc2 ), Fr( ~s_enc3 ),
+   !Server( $sid1 ), !Server( $sid2 ), !Server( $sid3 )
+   ]
+  --[
+  ClientRegister( $cid, ~pw, ~secret ), SourceC( ~s_enc1 ),
+  SourceC( ~s_enc2 ), SourceC( ~s_enc3 ), SourceP( h(~pw) ),
+  SourceF( ~koprf1 ), SourceF( ~koprf2 ), SourceF( ~koprf3 ),
+  Secret( 'koprf', (~koprf1++~koprf2++~koprf3), $cid, $sid1, $sid2,
+          $sid3
+  ),
+  Secret( 'kauth',
+          h(<~pw, mul((~koprf1++~koprf2++~koprf3), h(~pw))>), $cid, $sid1,
+          $sid2, $sid3
+  ),
+  Secret( 'kenc',
+          KDF((~s_enc1⊕~s_enc2⊕~s_enc3),
+              h(<~pw, mul((~koprf1++~koprf2++~koprf3), h(~pw))>)),
+          $cid, $sid1, $sid2, $sid3
+  ),
+  Secret( 'secret', ~secret, $cid, $sid1, $sid2, $sid3 ),
+  Restr_client_register_1( $sid1, $sid2, $sid1, $sid3, $sid2, $sid3 )
+  ]->
+   [
+   Out( senc(~secret,
+             KDF((~s_enc1⊕~s_enc2⊕~s_enc3),
+                 h(<~pw, mul((~koprf1++~koprf2++~koprf3), h(~pw))>)))
+   ),
+   SCClientOut( $cid, $sid1,
+                <$cid, ~koprf1, ~s_enc1, 
+                 pk(KDF(h(<~pw, mul((~koprf1++~koprf2++~koprf3), h(~pw))>), '1'))>
+   ),
+   SCClientOut( $cid, $sid2,
+                <$cid, ~koprf2, ~s_enc2, 
+                 pk(KDF(h(<~pw, mul((~koprf1++~koprf2++~koprf3), h(~pw))>), '2'))>
+   ),
+   SCClientOut( $cid, $sid3,
+                <$cid, ~koprf3, ~s_enc3, 
+                 pk(KDF(h(<~pw, mul((~koprf1++~koprf2++~koprf3), h(~pw))>), '3'))>
+   ),
+   !Client_1( $cid, ~pw, $sid1, $sid2, $sid3 )
+   ]
+
+  /*
+  rule (modulo AC) client_register[color=#77b58d]:
+     [
+     Client_0( $cid, ~pw, ~secret ), Fr( ~koprf1 ), Fr( ~koprf2 ),
+     Fr( ~koprf3 ), Fr( ~s_enc1 ), Fr( ~s_enc2 ), Fr( ~s_enc3 ),
+     !Server( $sid1 ), !Server( $sid2 ), !Server( $sid3 )
+     ]
+    --[
+    ClientRegister( $cid, ~pw, ~secret ), SourceC( ~s_enc1 ),
+    SourceC( ~s_enc2 ), SourceC( ~s_enc3 ), SourceP( h(~pw) ),
+    SourceF( ~koprf1 ), SourceF( ~koprf2 ), SourceF( ~koprf3 ),
+    Secret( 'koprf', (~koprf1++~koprf2++~koprf3), $cid, $sid1, $sid2,
+            $sid3
+    ),
+    Secret( 'kauth',
+            h(<~pw, mul((~koprf1++~koprf2++~koprf3), h(~pw))>), $cid, $sid1,
+            $sid2, $sid3
+    ),
+    Secret( 'kenc',
+            KDF(z, h(<~pw, mul((~koprf1++~koprf2++~koprf3), h(~pw))>)), $cid,
+            $sid1, $sid2, $sid3
+    ),
+    Secret( 'secret', ~secret, $cid, $sid1, $sid2, $sid3 ),
+    Restr_client_register_1( $sid1, $sid2, $sid1, $sid3, $sid2, $sid3 )
+    ]->
+     [
+     Out( senc(~secret,
+               KDF(z, h(<~pw, mul((~koprf1++~koprf2++~koprf3), h(~pw))>)))
+     ),
+     SCClientOut( $cid, $sid1,
+                  <$cid, ~koprf1, ~s_enc1, 
+                   pk(KDF(h(<~pw, mul((~koprf1++~koprf2++~koprf3), h(~pw))>), '1'))>
+     ),
+     SCClientOut( $cid, $sid2,
+                  <$cid, ~koprf2, ~s_enc2, 
+                   pk(KDF(h(<~pw, mul((~koprf1++~koprf2++~koprf3), h(~pw))>), '2'))>
+     ),
+     SCClientOut( $cid, $sid3,
+                  <$cid, ~koprf3, ~s_enc3, 
+                   pk(KDF(h(<~pw, mul((~koprf1++~koprf2++~koprf3), h(~pw))>), '3'))>
+     ),
+     !Client_1( $cid, ~pw, $sid1, $sid2, $sid3 )
+     ]
+    variants (modulo AC)
+    1. ~s_enc1
+             = ~s_enc1.16
+       ~s_enc2
+             = ~s_enc2.17
+       ~s_enc3
+             = ~s_enc1.16
+       z     = ~s_enc2.17
+    
+    2. ~s_enc1
+             = ~s_enc1.16
+       ~s_enc2
+             = ~s_enc2.17
+       ~s_enc3
+             = ~s_enc2.17
+       z     = ~s_enc1.16
+    
+    3. ~s_enc1
+             = ~s_enc1.17
+       ~s_enc2
+             = ~s_enc1.17
+       ~s_enc3
+             = ~s_enc3.19
+       z     = ~s_enc3.19
+    
+    4. ~s_enc1
+             = ~s_enc1.17
+       ~s_enc2
+             = ~s_enc2.18
+       ~s_enc3
+             = ~s_enc3.19
+       z     = (~s_enc1.17⊕~s_enc2.18⊕~s_enc3.19)
+  */
+
+rule (modulo E) server_register[color=#7793b5]:
+   [
+   !Server( $sid ),
+   SCServerIn( $client, $sid, <$cid, koprf_share, s_enc_share, kvfy> )
+   ]
+  --[ ServerAction( ) ]->
+   [ !Server_1( $sid, $cid, koprf_share, s_enc_share, kvfy ) ]
+
+  // loop breaker: [1]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) client_reconstruct_phase1[color=#77b58d]:
+   [ !Client_1( $cid, ~pw, $sid1, $sid2, $sid3 ), Fr( ~b ) ]
+  --[ ClientReconstructPhase1( $cid, ~pw ), SourceF( ~b ) ]->
+   [
+   SCClientOut( $cid, $sid1, <$cid, mul(~b, h(~pw))> ),
+   SCClientOut( $cid, $sid2, <$cid, mul(~b, h(~pw))> ),
+   SCClientOut( $cid, $sid3, <$cid, mul(~b, h(~pw))> ),
+   Client_2( $cid, ~pw, $sid1, $sid2, $sid3, ~b ), !Factor( ~b )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) server_reconstruct_phase1[derivchecks,
+                                          color=#7793b5]:
+   [
+   !Server_1( $sid, $cid, koprf_share, s_enc_share, kvfy ),
+   SCServerIn( $client, $sid, <$cid, mul(factors, hpw)> )
+   ]
+  --[
+  ServerAction( ), ServerReconstructPhase1( $sid ),
+  SourceC( mul((factors++koprf_share), hpw) ), SourcesPoint( hpw )
+  ]->
+   [
+   SCServerOut( $client, $sid, mul((factors++koprf_share), hpw) ),
+   Server_2( $sid, $cid, s_enc_share, kvfy, mul(factors, hpw) ),
+   !Factor( koprf_share )
+   ]
+
+  // loop breaker: [1]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) client_reconstruct_phase2[derivchecks,
+                                          color=#77b58d]:
+   [
+   Client_2( $cid, ~pw, $sid1, $sid2, $sid3, ~b ),
+   SCClientIn( $cid, $sid1, mul((~b++koprf1), hpw) ),
+   SCClientIn( $cid, $sid2, mul((~b++koprf2), hpw) ),
+   SCClientIn( $cid, $sid3, mul((~b++koprf3), hpw) )
+   ]
+  --[ ClientReconstructPhase2( $cid, ~pw ) ]->
+   [
+   SCClientOut( $cid, $sid1,
+                sign(h(mul(~b, h(~pw))),
+                     KDF(h(<~pw, mul((koprf1++koprf2++koprf3), hpw)>), '1'))
+   ),
+   SCClientOut( $cid, $sid2,
+                sign(h(mul(~b, h(~pw))),
+                     KDF(h(<~pw, mul((koprf1++koprf2++koprf3), hpw)>), '2'))
+   ),
+   SCClientOut( $cid, $sid3,
+                sign(h(mul(~b, h(~pw))),
+                     KDF(h(<~pw, mul((koprf1++koprf2++koprf3), hpw)>), '3'))
+   ),
+   Client_3( $cid, ~pw, h(<~pw, mul((koprf1++koprf2++koprf3), hpw)>),
+             $sid1, $sid2, $sid3
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+restriction Restr_server_reconstruct_phase2_1:
+  "∀ x #NOW.
+    (Restr_server_reconstruct_phase2_1( x ) @ #NOW) ⇒ (x = true)"
+  // safety formula
+
+rule (modulo E) server_reconstruct_phase2[color=#7793b5]:
+   [
+   Server_2( $sid, $cid, s_enc_share, kvfy, bhpw ),
+   SCServerIn( $client, $sid, sig )
+   ]
+  --[
+  ServerAction( ),
+  Restr_server_reconstruct_phase2_1( verify(sig, h(bhpw), kvfy) )
+  ]->
+   [ SCServerOut( $client, $sid, s_enc_share ) ]
+
+  // loop breaker: [1]
+  /*
+  rule (modulo AC) server_reconstruct_phase2[color=#7793b5]:
+     [
+     Server_2( $sid, $cid, s_enc_share, kvfy, bhpw ),
+     SCServerIn( $client, $sid, sig )
+     ]
+    --[ ServerAction( ), Restr_server_reconstruct_phase2_1( z ) ]->
+     [ SCServerOut( $client, $sid, s_enc_share ) ]
+    variants (modulo AC)
+    1. bhpw  = bhpw.9
+       kvfy  = kvfy.9
+       sig   = sig.9
+       z     = verify(sig.9, h(bhpw.9), kvfy.9)
+    
+    2. bhpw  = x.9
+       kvfy  = pk(x.10)
+       sig   = sign(h(x.9), x.10)
+       z     = true
+    // loop breaker: [1]
+  */
+
+rule (modulo E) client_reconstruct_finish[color=#77b58d]:
+   [
+   Client_3( $cid, ~pw, kauth, $sid1, $sid2, $sid3 ),
+   SCClientIn( $cid, $sid1, s_enc1 ),
+   SCClientIn( $cid, $sid2, s_enc2 ),
+   SCClientIn( $cid, $sid3, s_enc3 ), In( encrypted_secret )
+   ]
+  --[
+  ClientReconstructFinish( $cid, ~pw,
+                           sdec(encrypted_secret, KDF((s_enc1⊕s_enc2⊕s_enc3), kauth))
+  )
+  ]->
+   [ ]
+
+  /*
+  rule (modulo AC) client_reconstruct_finish[color=#77b58d]:
+     [
+     Client_3( $cid, ~pw, kauth, $sid1, $sid2, $sid3 ),
+     SCClientIn( $cid, $sid1, s_enc1 ),
+     SCClientIn( $cid, $sid2, s_enc2 ),
+     SCClientIn( $cid, $sid3, s_enc3 ), In( encrypted_secret )
+     ]
+    --[ ClientReconstructFinish( $cid, ~pw, z ) ]->
+     [ ]
+    variants (modulo AC)
+      1. encrypted_secret
+               = encrypted_secret.12
+         kauth = kauth.12
+         s_enc1
+               = s_enc1.12
+         s_enc2
+               = s_enc2.12
+         s_enc3
+               = s_enc3.12
+         z     = sdec(encrypted_secret.12,
+                      KDF((s_enc1.12⊕s_enc2.12⊕s_enc3.12), kauth.12))
+    
+      2. encrypted_secret
+               = encrypted_secret.12
+         kauth = kauth.12
+         s_enc1
+               = s_enc1.12
+         s_enc2
+               = s_enc2.12
+         s_enc3
+               = zero
+         z     = sdec(encrypted_secret.12,
+                      KDF((s_enc1.12⊕s_enc2.12), kauth.12))
+    
+      3. encrypted_secret
+               = encrypted_secret.12
+         kauth = kauth.12
+         s_enc1
+               = s_enc1.12
+         s_enc2
+               = zero
+         s_enc3
+               = s_enc3.12
+         z     = sdec(encrypted_secret.12,
+                      KDF((s_enc1.12⊕s_enc3.12), kauth.12))
+    
+      4. encrypted_secret
+               = encrypted_secret.12
+         kauth = kauth.12
+         s_enc1
+               = zero
+         s_enc2
+               = s_enc2.12
+         s_enc3
+               = s_enc3.12
+         z     = sdec(encrypted_secret.12,
+                      KDF((s_enc2.12⊕s_enc3.12), kauth.12))
+    
+      5. encrypted_secret
+               = encrypted_secret.13
+         kauth = kauth.13
+         s_enc1
+               = x.12
+         s_enc2
+               = x.12
+         s_enc3
+               = s_enc3.13
+         z     = sdec(encrypted_secret.13, KDF(s_enc3.13, kauth.13))
+    
+      6. encrypted_secret
+               = encrypted_secret.13
+         kauth = kauth.13
+         s_enc1
+               = x.12
+         s_enc2
+               = s_enc2.13
+         s_enc3
+               = x.12
+         z     = sdec(encrypted_secret.13, KDF(s_enc2.13, kauth.13))
+    
+      7. encrypted_secret
+               = encrypted_secret.13
+         kauth = kauth.13
+         s_enc1
+               = s_enc1.13
+         s_enc2
+               = x.12
+         s_enc3
+               = x.12
+         z     = sdec(encrypted_secret.13, KDF(s_enc1.13, kauth.13))
+    
+      8. encrypted_secret
+               = encrypted_secret.14
+         kauth = kauth.14
+         s_enc1
+               = x.12
+         s_enc2
+               = x.13
+         s_enc3
+               = (x.12⊕x.13)
+         z     = sdec(encrypted_secret.14, KDF(zero, kauth.14))
+    
+      9. encrypted_secret
+               = encrypted_secret.14
+         kauth = kauth.14
+         s_enc1
+               = x.12
+         s_enc2
+               = zero
+         s_enc3
+               = (x.12⊕x.13)
+         z     = sdec(encrypted_secret.14, KDF(x.13, kauth.14))
+    
+     10. encrypted_secret
+               = encrypted_secret.14
+         kauth = kauth.14
+         s_enc1
+               = x.12
+         s_enc2
+               = (x.12⊕x.13)
+         s_enc3
+               = x.13
+         z     = sdec(encrypted_secret.14, KDF(zero, kauth.14))
+    
+     11. encrypted_secret
+               = encrypted_secret.14
+         kauth = kauth.14
+         s_enc1
+               = x.12
+         s_enc2
+               = (x.12⊕x.13)
+         s_enc3
+               = s_enc3.14
+         z     = sdec(encrypted_secret.14, KDF((x.13⊕s_enc3.14), kauth.14))
+    
+     12. encrypted_secret
+               = encrypted_secret.14
+         kauth = kauth.14
+         s_enc1
+               = x.12
+         s_enc2
+               = (x.12⊕x.13)
+         s_enc3
+               = zero
+         z     = sdec(encrypted_secret.14, KDF(x.13, kauth.14))
+    
+     13. encrypted_secret
+               = encrypted_secret.14
+         kauth = kauth.14
+         s_enc1
+               = s_enc1.14
+         s_enc2
+               = x.12
+         s_enc3
+               = (x.12⊕x.13)
+         z     = sdec(encrypted_secret.14, KDF((x.13⊕s_enc1.14), kauth.14))
+    
+     14. encrypted_secret
+               = encrypted_secret.14
+         kauth = kauth.14
+         s_enc1
+               = s_enc1.14
+         s_enc2
+               = (x.12⊕x.13)
+         s_enc3
+               = x.12
+         z     = sdec(encrypted_secret.14, KDF((x.13⊕s_enc1.14), kauth.14))
+    
+     15. encrypted_secret
+               = encrypted_secret.14
+         kauth = kauth.14
+         s_enc1
+               = zero
+         s_enc2
+               = x.12
+         s_enc3
+               = (x.12⊕x.13)
+         z     = sdec(encrypted_secret.14, KDF(x.13, kauth.14))
+    
+     16. encrypted_secret
+               = encrypted_secret.14
+         kauth = kauth.14
+         s_enc1
+               = zero
+         s_enc2
+               = (x.12⊕x.13)
+         s_enc3
+               = x.12
+         z     = sdec(encrypted_secret.14, KDF(x.13, kauth.14))
+    
+     17. encrypted_secret
+               = encrypted_secret.14
+         kauth = kauth.14
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = x.12
+         s_enc3
+               = x.13
+         z     = sdec(encrypted_secret.14, KDF(zero, kauth.14))
+    
+     18. encrypted_secret
+               = encrypted_secret.14
+         kauth = kauth.14
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = x.12
+         s_enc3
+               = s_enc3.14
+         z     = sdec(encrypted_secret.14, KDF((x.13⊕s_enc3.14), kauth.14))
+    
+     19. encrypted_secret
+               = encrypted_secret.14
+         kauth = kauth.14
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = x.12
+         s_enc3
+               = zero
+         z     = sdec(encrypted_secret.14, KDF(x.13, kauth.14))
+    
+     20. encrypted_secret
+               = encrypted_secret.14
+         kauth = kauth.14
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = s_enc2.14
+         s_enc3
+               = x.12
+         z     = sdec(encrypted_secret.14, KDF((x.13⊕s_enc2.14), kauth.14))
+    
+     21. encrypted_secret
+               = encrypted_secret.14
+         kauth = kauth.14
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = zero
+         s_enc3
+               = x.12
+         z     = sdec(encrypted_secret.14, KDF(x.13, kauth.14))
+    
+     22. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = x.12
+         s_enc2
+               = x.13
+         s_enc3
+               = (x.12⊕x.13⊕x.14)
+         z     = sdec(encrypted_secret.15, KDF(x.14, kauth.15))
+    
+     23. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = x.12
+         s_enc2
+               = s_enc2.15
+         s_enc3
+               = (x.12⊕x.14)
+         z     = sdec(encrypted_secret.15, KDF((x.14⊕s_enc2.15), kauth.15))
+    
+     24. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = x.12
+         s_enc2
+               = (x.12⊕x.13)
+         s_enc3
+               = (x.13⊕x.14)
+         z     = sdec(encrypted_secret.15, KDF(x.14, kauth.15))
+    
+     25. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = x.12
+         s_enc2
+               = (x.12⊕x.13⊕x.14)
+         s_enc3
+               = x.14
+         z     = sdec(encrypted_secret.15, KDF(x.13, kauth.15))
+    
+     26. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = x.12
+         s_enc2
+               = (x.13⊕x.14)
+         s_enc3
+               = (x.12⊕x.14)
+         z     = sdec(encrypted_secret.15, KDF(x.13, kauth.15))
+    
+     27. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = s_enc1.15
+         s_enc2
+               = (x.12⊕x.13)
+         s_enc3
+               = (x.12⊕x.14)
+         z     = sdec(encrypted_secret.15,
+                      KDF((x.13⊕x.14⊕s_enc1.15), kauth.15))
+    
+     28. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = zero
+         s_enc2
+               = (x.12⊕x.13)
+         s_enc3
+               = (x.12⊕x.14)
+         z     = sdec(encrypted_secret.15, KDF((x.13⊕x.14), kauth.15))
+    
+     29. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = x.12
+         s_enc3
+               = (x.13⊕x.14)
+         z     = sdec(encrypted_secret.15, KDF(x.14, kauth.15))
+    
+     30. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = x.14
+         s_enc3
+               = (x.12⊕x.14)
+         z     = sdec(encrypted_secret.15, KDF(x.13, kauth.15))
+    
+     31. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = zero
+         s_enc3
+               = (x.12⊕x.14)
+         z     = sdec(encrypted_secret.15, KDF((x.13⊕x.14), kauth.15))
+    
+     32. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = (x.12⊕x.14)
+         s_enc3
+               = x.13
+         z     = sdec(encrypted_secret.15, KDF(x.14, kauth.15))
+    
+     33. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = (x.12⊕x.14)
+         s_enc3
+               = x.14
+         z     = sdec(encrypted_secret.15, KDF(x.13, kauth.15))
+    
+     34. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = (x.12⊕x.14)
+         s_enc3
+               = s_enc3.15
+         z     = sdec(encrypted_secret.15,
+                      KDF((x.13⊕x.14⊕s_enc3.15), kauth.15))
+    
+     35. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = (x.12⊕x.14)
+         s_enc3
+               = zero
+         z     = sdec(encrypted_secret.15, KDF((x.13⊕x.14), kauth.15))
+    
+     36. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = (x.12⊕x.14)
+         s_enc3
+               = (x.13⊕x.14)
+         z     = sdec(encrypted_secret.15, KDF(zero, kauth.15))
+    
+     37. encrypted_secret
+               = encrypted_secret.15
+         kauth = kauth.15
+         s_enc1
+               = (x.12⊕x.13⊕x.14)
+         s_enc2
+               = x.13
+         s_enc3
+               = x.14
+         z     = sdec(encrypted_secret.15, KDF(x.12, kauth.15))
+    
+     38. encrypted_secret
+               = encrypted_secret.16
+         kauth = kauth.16
+         s_enc1
+               = x.12
+         s_enc2
+               = (x.12⊕x.13⊕x.14)
+         s_enc3
+               = (x.13⊕x.15)
+         z     = sdec(encrypted_secret.16, KDF((x.14⊕x.15), kauth.16))
+    
+     39. encrypted_secret
+               = encrypted_secret.16
+         kauth = kauth.16
+         s_enc1
+               = x.12
+         s_enc2
+               = (x.13⊕x.14)
+         s_enc3
+               = (x.12⊕x.13⊕x.15)
+         z     = sdec(encrypted_secret.16, KDF((x.14⊕x.15), kauth.16))
+    
+     40. encrypted_secret
+               = encrypted_secret.16
+         kauth = kauth.16
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = x.14
+         s_enc3
+               = (x.12⊕x.14⊕x.15)
+         z     = sdec(encrypted_secret.16, KDF((x.13⊕x.15), kauth.16))
+    
+     41. encrypted_secret
+               = encrypted_secret.16
+         kauth = kauth.16
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = s_enc2.16
+         s_enc3
+               = (x.12⊕x.15)
+         z     = sdec(encrypted_secret.16,
+                      KDF((x.13⊕x.15⊕s_enc2.16), kauth.16))
+    
+     42. encrypted_secret
+               = encrypted_secret.16
+         kauth = kauth.16
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = (x.12⊕x.14)
+         s_enc3
+               = (x.13⊕x.14⊕x.15)
+         z     = sdec(encrypted_secret.16, KDF(x.15, kauth.16))
+    
+     43. encrypted_secret
+               = encrypted_secret.16
+         kauth = kauth.16
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = (x.12⊕x.14)
+         s_enc3
+               = (x.13⊕x.15)
+         z     = sdec(encrypted_secret.16, KDF((x.14⊕x.15), kauth.16))
+    
+     44. encrypted_secret
+               = encrypted_secret.16
+         kauth = kauth.16
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = (x.12⊕x.14)
+         s_enc3
+               = (x.14⊕x.15)
+         z     = sdec(encrypted_secret.16, KDF((x.13⊕x.15), kauth.16))
+    
+     45. encrypted_secret
+               = encrypted_secret.16
+         kauth = kauth.16
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = (x.12⊕x.14⊕x.15)
+         s_enc3
+               = x.14
+         z     = sdec(encrypted_secret.16, KDF((x.13⊕x.15), kauth.16))
+    
+     46. encrypted_secret
+               = encrypted_secret.16
+         kauth = kauth.16
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = (x.12⊕x.14⊕x.15)
+         s_enc3
+               = (x.13⊕x.15)
+         z     = sdec(encrypted_secret.16, KDF(x.14, kauth.16))
+    
+     47. encrypted_secret
+               = encrypted_secret.16
+         kauth = kauth.16
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = (x.14⊕x.15)
+         s_enc3
+               = (x.12⊕x.14)
+         z     = sdec(encrypted_secret.16, KDF((x.13⊕x.15), kauth.16))
+    
+     48. encrypted_secret
+               = encrypted_secret.16
+         kauth = kauth.16
+         s_enc1
+               = (x.12⊕x.13⊕x.14)
+         s_enc2
+               = x.13
+         s_enc3
+               = (x.12⊕x.15)
+         z     = sdec(encrypted_secret.16, KDF((x.14⊕x.15), kauth.16))
+    
+     49. encrypted_secret
+               = encrypted_secret.16
+         kauth = kauth.16
+         s_enc1
+               = (x.12⊕x.13⊕x.14)
+         s_enc2
+               = (x.12⊕x.15)
+         s_enc3
+               = x.13
+         z     = sdec(encrypted_secret.16, KDF((x.14⊕x.15), kauth.16))
+    
+     50. encrypted_secret
+               = encrypted_secret.16
+         kauth = kauth.16
+         s_enc1
+               = (x.12⊕x.13⊕x.14)
+         s_enc2
+               = (x.13⊕x.15)
+         s_enc3
+               = (x.12⊕x.15)
+         z     = sdec(encrypted_secret.16, KDF(x.14, kauth.16))
+    
+     51. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = (x.12⊕x.14⊕x.15)
+         s_enc3
+               = (x.13⊕x.14⊕x.16)
+         z     = sdec(encrypted_secret.17, KDF((x.15⊕x.16), kauth.17))
+    
+     52. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = (x.12⊕x.14⊕x.15)
+         s_enc3
+               = (x.14⊕x.16)
+         z     = sdec(encrypted_secret.17, KDF((x.13⊕x.15⊕x.16), kauth.17))
+    
+     53. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = (x.12⊕x.13)
+         s_enc2
+               = (x.14⊕x.15)
+         s_enc3
+               = (x.12⊕x.14⊕x.16)
+         z     = sdec(encrypted_secret.17, KDF((x.13⊕x.15⊕x.16), kauth.17))
+    
+     54. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = (x.12⊕x.13⊕x.14)
+         s_enc2
+               = (x.13⊕x.15)
+         s_enc3
+               = (x.12⊕x.15⊕x.16)
+         z     = sdec(encrypted_secret.17, KDF((x.14⊕x.16), kauth.17))
+    
+     55. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = (x.12⊕x.13⊕x.14)
+         s_enc2
+               = (x.13⊕x.15)
+         s_enc3
+               = (x.12⊕x.16)
+         z     = sdec(encrypted_secret.17, KDF((x.14⊕x.15⊕x.16), kauth.17))
+    
+     56. encrypted_secret
+               = encrypted_secret.17
+         kauth = kauth.17
+         s_enc1
+               = (x.12⊕x.13⊕x.14)
+         s_enc2
+               = (x.13⊕x.15⊕x.16)
+         s_enc3
+               = (x.12⊕x.15)
+         z     = sdec(encrypted_secret.17, KDF((x.14⊕x.16), kauth.17))
+    
+     57. encrypted_secret
+               = encrypted_secret.18
+         kauth = kauth.18
+         s_enc1
+               = (x.12⊕x.13⊕x.14)
+         s_enc2
+               = (x.13⊕x.15⊕x.16)
+         s_enc3
+               = (x.12⊕x.15⊕x.17)
+         z     = sdec(encrypted_secret.18, KDF((x.14⊕x.16⊕x.17), kauth.18))
+    
+     58. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = x.13
+         s_enc2
+               = x.15
+         s_enc3
+               = x.15
+         z     = x.12
+    
+     59. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = x.15
+         s_enc2
+               = x.13
+         s_enc3
+               = x.15
+         z     = x.12
+    
+     60. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = x.15
+         s_enc2
+               = x.15
+         s_enc3
+               = x.13
+         z     = x.12
+    
+     61. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = x.15
+         s_enc2
+               = x.16
+         s_enc3
+               = (x.13⊕x.15⊕x.16)
+         z     = x.12
+    
+     62. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = x.15
+         s_enc2
+               = zero
+         s_enc3
+               = (x.13⊕x.15)
+         z     = x.12
+    
+     63. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = x.15
+         s_enc2
+               = (x.13⊕x.15)
+         s_enc3
+               = zero
+         z     = x.12
+    
+     64. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = x.15
+         s_enc2
+               = (x.13⊕x.15⊕x.16)
+         s_enc3
+               = x.16
+         z     = x.12
+    
+     65. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = x.15
+         s_enc2
+               = (x.13⊕x.16)
+         s_enc3
+               = (x.15⊕x.16)
+         z     = x.12
+    
+     66. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = x.15
+         s_enc2
+               = (x.15⊕x.16)
+         s_enc3
+               = (x.13⊕x.16)
+         z     = x.12
+    
+     67. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = zero
+         s_enc2
+               = x.15
+         s_enc3
+               = (x.13⊕x.15)
+         z     = x.12
+    
+     68. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = zero
+         s_enc2
+               = (x.13⊕x.15)
+         s_enc3
+               = x.15
+         z     = x.12
+    
+     69. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = (x.13⊕x.15)
+         s_enc2
+               = x.15
+         s_enc3
+               = zero
+         z     = x.12
+    
+     70. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = (x.13⊕x.15)
+         s_enc2
+               = x.16
+         s_enc3
+               = (x.15⊕x.16)
+         z     = x.12
+    
+     71. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = (x.13⊕x.15)
+         s_enc2
+               = zero
+         s_enc3
+               = x.15
+         z     = x.12
+    
+     72. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = (x.13⊕x.15)
+         s_enc2
+               = (x.15⊕x.16)
+         s_enc3
+               = x.16
+         z     = x.12
+    
+     73. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = (x.13⊕x.15⊕x.16)
+         s_enc2
+               = x.15
+         s_enc3
+               = x.16
+         z     = x.12
+    
+     74. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = (x.13⊕x.15⊕x.16)
+         s_enc2
+               = (x.16⊕x.17)
+         s_enc3
+               = (x.15⊕x.17)
+         z     = x.12
+    
+     75. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = x.15
+         s_enc3
+               = (x.13⊕x.16)
+         z     = x.12
+    
+     76. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = (x.13⊕x.15)
+         s_enc3
+               = x.16
+         z     = x.12
+    
+     77. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = (x.13⊕x.15⊕x.17)
+         s_enc3
+               = (x.16⊕x.17)
+         z     = x.12
+    
+     78. encrypted_secret
+               = senc(x.12, KDF(x.13, x.14))
+         kauth = x.14
+         s_enc1
+               = (x.15⊕x.16)
+         s_enc2
+               = (x.15⊕x.17)
+         s_enc3
+               = (x.13⊕x.16⊕x.17)
+         z     = x.12
+    
+     79. encrypted_secret
+               = senc(x.12, KDF(zero, x.13))
+         kauth = x.13
+         s_enc1
+               = x.14
+         s_enc2
+               = x.15
+         s_enc3
+               = (x.14⊕x.15)
+         z     = x.12
+    
+     80. encrypted_secret
+               = senc(x.12, KDF(zero, x.13))
+         kauth = x.13
+         s_enc1
+               = x.14
+         s_enc2
+               = (x.14⊕x.15)
+         s_enc3
+               = x.15
+         z     = x.12
+    
+     81. encrypted_secret
+               = senc(x.12, KDF(zero, x.13))
+         kauth = x.13
+         s_enc1
+               = (x.14⊕x.15)
+         s_enc2
+               = x.14
+         s_enc3
+               = x.15
+         z     = x.12
+    
+     82. encrypted_secret
+               = senc(x.12, KDF(zero, x.13))
+         kauth = x.13
+         s_enc1
+               = (x.14⊕x.15)
+         s_enc2
+               = (x.14⊕x.16)
+         s_enc3
+               = (x.15⊕x.16)
+         z     = x.12
+    
+     83. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = x.13
+         s_enc2
+               = x.14
+         s_enc3
+               = zero
+         z     = x.12
+    
+     84. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = x.13
+         s_enc2
+               = x.16
+         s_enc3
+               = (x.14⊕x.16)
+         z     = x.12
+    
+     85. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = x.13
+         s_enc2
+               = zero
+         s_enc3
+               = x.14
+         z     = x.12
+    
+     86. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = x.13
+         s_enc2
+               = (x.14⊕x.16)
+         s_enc3
+               = x.16
+         z     = x.12
+    
+     87. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = x.16
+         s_enc2
+               = x.13
+         s_enc3
+               = (x.14⊕x.16)
+         z     = x.12
+    
+     88. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = x.16
+         s_enc2
+               = (x.13⊕x.16)
+         s_enc3
+               = x.14
+         z     = x.12
+    
+     89. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = x.16
+         s_enc2
+               = (x.13⊕x.16⊕x.17)
+         s_enc3
+               = (x.14⊕x.17)
+         z     = x.12
+    
+     90. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = x.16
+         s_enc2
+               = (x.13⊕x.17)
+         s_enc3
+               = (x.14⊕x.16⊕x.17)
+         z     = x.12
+    
+     91. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = zero
+         s_enc2
+               = x.13
+         s_enc3
+               = x.14
+         z     = x.12
+    
+     92. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = zero
+         s_enc2
+               = (x.13⊕x.16)
+         s_enc3
+               = (x.14⊕x.16)
+         z     = x.12
+    
+     93. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = (x.13⊕x.16)
+         s_enc2
+               = x.14
+         s_enc3
+               = x.16
+         z     = x.12
+    
+     94. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = (x.13⊕x.16)
+         s_enc2
+               = x.16
+         s_enc3
+               = x.14
+         z     = x.12
+    
+     95. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = (x.13⊕x.16)
+         s_enc2
+               = x.17
+         s_enc3
+               = (x.14⊕x.16⊕x.17)
+         z     = x.12
+    
+     96. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = (x.13⊕x.16)
+         s_enc2
+               = zero
+         s_enc3
+               = (x.14⊕x.16)
+         z     = x.12
+    
+     97. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = (x.13⊕x.16)
+         s_enc2
+               = (x.14⊕x.16)
+         s_enc3
+               = zero
+         z     = x.12
+    
+     98. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = (x.13⊕x.16)
+         s_enc2
+               = (x.14⊕x.16⊕x.17)
+         s_enc3
+               = x.17
+         z     = x.12
+    
+     99. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = (x.13⊕x.16)
+         s_enc2
+               = (x.14⊕x.17)
+         s_enc3
+               = (x.16⊕x.17)
+         z     = x.12
+    
+    100. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = (x.13⊕x.16)
+         s_enc2
+               = (x.16⊕x.17)
+         s_enc3
+               = (x.14⊕x.17)
+         z     = x.12
+    
+    101. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = (x.13⊕x.16⊕x.17)
+         s_enc2
+               = x.17
+         s_enc3
+               = (x.14⊕x.16)
+         z     = x.12
+    
+    102. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = (x.13⊕x.16⊕x.17)
+         s_enc2
+               = (x.14⊕x.16)
+         s_enc3
+               = x.17
+         z     = x.12
+    
+    103. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = (x.13⊕x.16⊕x.17)
+         s_enc2
+               = (x.14⊕x.17⊕x.18)
+         s_enc3
+               = (x.16⊕x.18)
+         z     = x.12
+    
+    104. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = (x.13⊕x.16⊕x.17)
+         s_enc2
+               = (x.17⊕x.18)
+         s_enc3
+               = (x.14⊕x.16⊕x.18)
+         z     = x.12
+    
+    105. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = (x.16⊕x.17)
+         s_enc2
+               = (x.13⊕x.16)
+         s_enc3
+               = (x.14⊕x.17)
+         z     = x.12
+    
+    106. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14), x.15))
+         kauth = x.15
+         s_enc1
+               = (x.16⊕x.17)
+         s_enc2
+               = (x.13⊕x.16⊕x.18)
+         s_enc3
+               = (x.14⊕x.17⊕x.18)
+         z     = x.12
+    
+    107. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14⊕x.15), x.16))
+         kauth = x.16
+         s_enc1
+               = x.13
+         s_enc2
+               = x.14
+         s_enc3
+               = x.15
+         z     = x.12
+    
+    108. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14⊕x.15), x.16))
+         kauth = x.16
+         s_enc1
+               = x.13
+         s_enc2
+               = (x.14⊕x.17)
+         s_enc3
+               = (x.15⊕x.17)
+         z     = x.12
+    
+    109. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14⊕x.15), x.16))
+         kauth = x.16
+         s_enc1
+               = (x.13⊕x.17)
+         s_enc2
+               = x.14
+         s_enc3
+               = (x.15⊕x.17)
+         z     = x.12
+    
+    110. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14⊕x.15), x.16))
+         kauth = x.16
+         s_enc1
+               = (x.13⊕x.17)
+         s_enc2
+               = (x.14⊕x.17)
+         s_enc3
+               = x.15
+         z     = x.12
+    
+    111. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14⊕x.15), x.16))
+         kauth = x.16
+         s_enc1
+               = (x.13⊕x.17)
+         s_enc2
+               = (x.14⊕x.17⊕x.18)
+         s_enc3
+               = (x.15⊕x.18)
+         z     = x.12
+    
+    112. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14⊕x.15), x.16))
+         kauth = x.16
+         s_enc1
+               = (x.13⊕x.17)
+         s_enc2
+               = (x.14⊕x.18)
+         s_enc3
+               = (x.15⊕x.17⊕x.18)
+         z     = x.12
+    
+    113. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14⊕x.15), x.16))
+         kauth = x.16
+         s_enc1
+               = (x.13⊕x.17⊕x.18)
+         s_enc2
+               = (x.14⊕x.18)
+         s_enc3
+               = (x.15⊕x.17)
+         z     = x.12
+    
+    114. encrypted_secret
+               = senc(x.12, KDF((x.13⊕x.14⊕x.15), x.16))
+         kauth = x.16
+         s_enc1
+               = (x.13⊕x.17⊕x.18)
+         s_enc2
+               = (x.14⊕x.18⊕x.19)
+         s_enc3
+               = (x.15⊕x.17⊕x.19)
+         z     = x.12
+  */
+
+restriction servers_offline:
+  "∀ #i #j.
+    ((PQAdversaryAction( ) @ #i) ∧ (ServerAction( ) @ #j)) ⇒ (#j < #i)"
+  // safety formula
+
+lemma types [sources, heuristic={sources}]:
+  all-traces
+  "((∀ msg #i.
+      (SourcesAdversaryRecv( msg ) @ #i) ⇒
+      ((∃ #j. (SourceC( msg ) @ #j) ∧ (#j < #i)) ∨
+       (∃ #j. (!KU( msg ) @ #j) ∧ (#j < #i)))) ∧
+    (∀ x #i.
+      (SourcesPoint( x ) @ #i) ⇒
+      ((∃ #j. (SourceP( x ) @ #j) ∧ (#j < #i)) ∨
+       (∃ #j. (!KU( x ) @ #j) ∧ (#j < #i))))) ∧
+   (∀ a #i.
+     (SourcesFactor( a ) @ #i) ⇒
+     ((∃ #j. (SourceF( a ) @ #j) ∧ (#j < #i)) ∨
+      (∃ #j. (!KU( a ) @ #j) ∧ (#j < #i))))"
+/*
+guarded formula characterizing all counter-examples:
+"((∃ msg #i.
+    (SourcesAdversaryRecv( msg ) @ #i)
+   ∧
+    (∀ #j. (SourceC( msg ) @ #j) ⇒ ¬(#j < #i)) ∧
+    (∀ #j. (!KU( msg ) @ #j) ⇒ ¬(#j < #i))) ∨
+  (∃ x #i.
+    (SourcesPoint( x ) @ #i)
+   ∧
+    (∀ #j. (SourceP( x ) @ #j) ⇒ ¬(#j < #i)) ∧
+    (∀ #j. (!KU( x ) @ #j) ⇒ ¬(#j < #i))) ∨
+  (∃ a #i.
+    (SourcesFactor( a ) @ #i)
+   ∧
+    (∀ #j. (SourceF( a ) @ #j) ⇒ ¬(#j < #i)) ∧
+    (∀ #j. (!KU( a ) @ #j) ⇒ ¬(#j < #i))))"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (∃ msg #i.
+           (SourcesAdversaryRecv( msg ) @ #i)
+          ∧
+           (∀ #j. (SourceC( msg ) @ #j) ⇒ ¬(#j < #i)) ∧
+           (∀ #j. (!KU( msg ) @ #j) ⇒ ¬(#j < #i)))  ∥
+         (∃ x #i.
+           (SourcesPoint( x ) @ #i)
+          ∧
+           (∀ #j. (SourceP( x ) @ #j) ⇒ ¬(#j < #i)) ∧
+           (∀ #j. (!KU( x ) @ #j) ⇒ ¬(#j < #i)))  ∥
+         (∃ a #i.
+           (SourcesFactor( a ) @ #i)
+          ∧
+           (∀ #j. (SourceF( a ) @ #j) ⇒ ¬(#j < #i)) ∧
+           (∀ #j. (!KU( a ) @ #j) ⇒ ¬(#j < #i))) )
+    case case_1
+    solve( (last(#i))  ∥
+           (∃ #j. (SourceC( msg ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #i))  ∥
+           (∃ #j. (!KU( msg ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #i)) )
+      case case_1
+      solve( !SCServerKnows( 'adv', $server, msg ) ▶₀ #i )
+        case server_out_case_1
+        by contradiction /* from formulas */
+      next
+        case server_out_case_2
+        by contradiction /* from formulas */
+      next
+        case server_out_case_3
+        solve( SCServerIn( $client.1, $server,
+                           <$cid, koprf_share, msg, pk(x)>
+               ) ▶₁ #vr.3 )
+          case server_in_case_1
+          by contradiction /* from formulas */
+        next
+          case server_in_case_2
+          by contradiction /* from formulas */
+        next
+          case server_in_case_3
+          by contradiction /* from formulas */
+        next
+          case server_in_case_4
+          by contradiction /* from formulas */
+        qed
+      qed
+    next
+      case case_2
+      by contradiction /* from formulas */
+    next
+      case case_3
+      by contradiction /* from formulas */
+    qed
+  next
+    case case_2
+    solve( (last(#i))  ∥
+           (∃ #j. (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #i))  ∥
+           (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #i)) )
+      case case_1
+      solve( SourcesPoint( x ) @ #i )
+        case add
+        solve( !KU( mul(b, x) ) @ #vk.1 )
+          case add
+          solve( (∃ #j. (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case adversary_recv_case_1
+          solve( (∃ #j.
+                   (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case adversary_recv_case_2
+          solve( SCServerIn( $client.1, $server,
+                             <$cid, koprf_share, t, pk(x.1)>
+                 ) ▶₁ #vr.4 )
+            case server_in_case_1
+            by contradiction /* cyclic */
+          next
+            case server_in_case_2
+            by contradiction /* impossible chain */
+          next
+            case server_in_case_3
+            by contradiction /* impossible chain */
+          next
+            case server_in_case_4
+            by contradiction /* impossible chain */
+          qed
+        next
+          case c_mul
+          by contradiction /* from formulas */
+        next
+          case combine
+          solve( (∃ #j. (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case eavesdrop_server_case_1
+          by contradiction /* from formulas */
+        next
+          case eavesdrop_server_case_2
+          by contradiction /* from formulas */
+        next
+          case eavesdrop_server_case_3
+          by contradiction /* from formulas */
+        next
+          case extract
+          solve( (∃ #j. (SourceP( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* impossible chain */
+          next
+            case case_2
+            by contradiction /* cyclic */
+          qed
+        next
+          case remove
+          solve( (∃ #j. (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case solve_dlog
+          solve( SCServerIn( $client.1, $sid, <$cid, t, s_enc_share, kvfy>
+                 ) ▶₁ #vr.2 )
+            case server_in_case_1
+            by contradiction /* cyclic */
+          next
+            case server_in_case_2
+            by contradiction /* impossible chain */
+          next
+            case server_in_case_3
+            by contradiction /* impossible chain */
+          next
+            case server_in_case_4
+            by contradiction /* impossible chain */
+          qed
+        qed
+      next
+        case combine
+        solve( !KU( mul(a, x) ) @ #vk )
+          case add
+          solve( (∃ #j. (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case adversary_recv_case_1
+          solve( (∃ #j.
+                   (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case adversary_recv_case_2
+          solve( SCServerIn( $client.1, $server,
+                             <$cid, koprf_share, t, pk(x.1)>
+                 ) ▶₁ #vr.4 )
+            case server_in_case_1
+            by contradiction /* cyclic */
+          next
+            case server_in_case_2
+            by contradiction /* impossible chain */
+          next
+            case server_in_case_3
+            by contradiction /* impossible chain */
+          next
+            case server_in_case_4
+            by contradiction /* impossible chain */
+          qed
+        next
+          case c_mul
+          by contradiction /* from formulas */
+        next
+          case combine
+          solve( (∃ #j. (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case eavesdrop_server_case_1
+          by contradiction /* from formulas */
+        next
+          case eavesdrop_server_case_2
+          by contradiction /* from formulas */
+        next
+          case eavesdrop_server_case_3
+          by contradiction /* from formulas */
+        next
+          case extract
+          solve( (∃ #j. (SourceP( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* impossible chain */
+          next
+            case case_2
+            by contradiction /* cyclic */
+          qed
+        next
+          case remove
+          solve( (∃ #j. (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case solve_dlog
+          solve( SCServerIn( $client.1, $sid, <$cid, t, s_enc_share, kvfy>
+                 ) ▶₁ #vr.2 )
+            case server_in_case_1
+            by contradiction /* cyclic */
+          next
+            case server_in_case_2
+            by contradiction /* impossible chain */
+          next
+            case server_in_case_3
+            by contradiction /* impossible chain */
+          next
+            case server_in_case_4
+            by contradiction /* impossible chain */
+          qed
+        qed
+      next
+        case extract
+        solve( !KU( mul(a, x) ) @ #vk.1 )
+          case add
+          solve( (∃ #j. (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case adversary_recv_case_1
+          solve( (∃ #j.
+                   (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case adversary_recv_case_2
+          solve( SCServerIn( $client.1, $server,
+                             <$cid, koprf_share, t, pk(x.1)>
+                 ) ▶₁ #vr.4 )
+            case server_in_case_1
+            by contradiction /* cyclic */
+          next
+            case server_in_case_2
+            by contradiction /* impossible chain */
+          next
+            case server_in_case_3
+            by contradiction /* impossible chain */
+          next
+            case server_in_case_4
+            by contradiction /* impossible chain */
+          qed
+        next
+          case c_mul
+          by contradiction /* from formulas */
+        next
+          case combine
+          solve( (∃ #j. (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case eavesdrop_server_case_1
+          by contradiction /* from formulas */
+        next
+          case eavesdrop_server_case_2
+          by contradiction /* from formulas */
+        next
+          case eavesdrop_server_case_3
+          by contradiction /* from formulas */
+        next
+          case extract
+          solve( (∃ #j. (SourceP( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* impossible chain */
+          next
+            case case_2
+            by contradiction /* cyclic */
+          qed
+        next
+          case remove
+          solve( (∃ #j. (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case solve_dlog
+          solve( SCServerIn( $client.1, $sid, <$cid, t, s_enc_share, kvfy>
+                 ) ▶₁ #vr.2 )
+            case server_in_case_1
+            by contradiction /* cyclic */
+          next
+            case server_in_case_2
+            by contradiction /* impossible chain */
+          next
+            case server_in_case_3
+            by contradiction /* impossible chain */
+          next
+            case server_in_case_4
+            by contradiction /* impossible chain */
+          qed
+        qed
+      next
+        case remove
+        solve( !KU( mul((a++b), x) ) @ #vk.1 )
+          case add_case_1
+          solve( (∃ #j. (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case add_case_2
+          solve( (∃ #j.
+                   (SourceP( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case add_case_3
+          solve( (∃ #j. (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case add_case_4
+          solve( (∃ #j.
+                   (SourceP( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case add_case_5
+          solve( (∃ #j.
+                   (SourceP( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case add_case_6
+          solve( (∃ #j.
+                   (SourceP( x.4 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x.4 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case add_case_7
+          solve( (∃ #j.
+                   (SourceP( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case adversary_recv_case_1
+          solve( (∃ #j.
+                   (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case adversary_recv_case_2
+          solve( (∃ #j.
+                   (SourceP( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case adversary_recv_case_3
+          solve( (∃ #j.
+                   (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case adversary_recv_case_4
+          solve( (∃ #j.
+                   (SourceP( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case adversary_recv_case_5
+          solve( (∃ #j.
+                   (SourceP( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case adversary_recv_case_6
+          solve( (∃ #j.
+                   (SourceP( x.4 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( x.4 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case adversary_recv_case_7
+          solve( (∃ #j.
+                   (SourceP( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case adversary_recv_case_8
+          solve( SCServerIn( $client.1, $server,
+                             <$cid, koprf_share, t, pk(x.1)>
+                 ) ▶₁ #vr.4 )
+            case server_in_case_1
+            by contradiction /* cyclic */
+          next
+            case server_in_case_2
+            by contradiction /* impossible chain */
+          next
+            case server_in_case_3
+            by contradiction /* impossible chain */
+          next
+            case server_in_case_4
+            by contradiction /* impossible chain */
+          qed
+        next
+          case c_mul
+          by contradiction /* from formulas */
+        next
+          case combine_case_1
+          solve( (∃ #j. (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case combine_case_2
+          solve( (∃ #j.
+                   (SourceP( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case combine_case_3
+          solve( (∃ #j. (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case combine_case_4
+          solve( (∃ #j.
+                   (SourceP( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case combine_case_5
+          solve( (∃ #j.
+                   (SourceP( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case combine_case_6
+          solve( (∃ #j.
+                   (SourceP( x.4 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x.4 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case combine_case_7
+          solve( (∃ #j.
+                   (SourceP( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x.1 ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case extract
+          solve( (∃ #j. (SourceP( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* impossible chain */
+          next
+            case case_2
+            by contradiction /* cyclic */
+          qed
+        next
+          case remove
+          solve( (∃ #j. (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+                 (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case solve_dlog
+          solve( SCServerIn( $client.1, $sid, <$cid, t, s_enc_share, kvfy>
+                 ) ▶₁ #vr.2 )
+            case server_in_case_1
+            by contradiction /* cyclic */
+          next
+            case server_in_case_2
+            by contradiction /* impossible chain */
+          next
+            case server_in_case_3
+            by contradiction /* impossible chain */
+          next
+            case server_in_case_4
+            by contradiction /* impossible chain */
+          qed
+        qed
+      next
+        case server_reconstruct_phase1
+        solve( !Server_1( $sid, $cid, koprf_share, s_enc_share, kvfy
+               ) ▶₀ #i )
+          case server_register
+          solve( SCServerIn( $client, $sid, <$cid, mul(factors, x)> ) ▶₁ #i )
+            case server_in_case_1
+            solve( !KU( mul(factors, x) ) @ #vk.2 )
+              case add
+              solve( (∃ #j.
+                       (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.6))  ∥
+                     (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.6)) )
+                case case_1
+                by contradiction /* from formulas */
+              next
+                case case_2
+                by contradiction /* from formulas */
+              qed
+            next
+              case adversary_recv_case_1
+              solve( (∃ #j.
+                       (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.8))  ∥
+                     (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.8)) )
+                case case_1
+                by contradiction /* from formulas */
+              next
+                case case_2
+                by contradiction /* from formulas */
+              qed
+            next
+              case adversary_recv_case_2
+              solve( SCServerIn( $client.2, $server,
+                                 <$cid.1, koprf_share.1, t, pk(x.1)>
+                     ) ▶₁ #vr.10 )
+                case server_in_case_1
+                by contradiction /* cyclic */
+              next
+                case server_in_case_2
+                by contradiction /* impossible chain */
+              next
+                case server_in_case_3
+                by contradiction /* impossible chain */
+              next
+                case server_in_case_4
+                by contradiction /* impossible chain */
+              qed
+            next
+              case c_mul
+              by contradiction /* from formulas */
+            next
+              case combine
+              solve( (∃ #j.
+                       (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.6))  ∥
+                     (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.6)) )
+                case case_1
+                by contradiction /* from formulas */
+              next
+                case case_2
+                by contradiction /* from formulas */
+              qed
+            next
+              case eavesdrop_server_case_1
+              by contradiction /* from formulas */
+            next
+              case eavesdrop_server_case_2
+              by contradiction /* from formulas */
+            next
+              case eavesdrop_server_case_3
+              by contradiction /* from formulas */
+            next
+              case extract
+              solve( (∃ #j.
+                       (SourceP( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.6))  ∥
+                     (∃ #j. (!KU( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.6)) )
+                case case_1
+                by contradiction /* impossible chain */
+              next
+                case case_2
+                by contradiction /* cyclic */
+              qed
+            next
+              case remove
+              solve( (∃ #j.
+                       (SourceP( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.6))  ∥
+                     (∃ #j. (!KU( x ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.6)) )
+                case case_1
+                by contradiction /* from formulas */
+              next
+                case case_2
+                by contradiction /* from formulas */
+              qed
+            next
+              case solve_dlog
+              by contradiction /* cyclic */
+            qed
+          next
+            case server_in_case_2
+            by contradiction /* from formulas */
+          next
+            case server_in_case_3
+            by contradiction /* from formulas */
+          next
+            case server_in_case_4
+            by contradiction /* from formulas */
+          qed
+        qed
+      qed
+    next
+      case case_2
+      by contradiction /* from formulas */
+    next
+      case case_3
+      by contradiction /* from formulas */
+    qed
+  next
+    case case_3
+    solve( (last(#i))  ∥
+           (∃ #j. (SourceF( a ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #i))  ∥
+           (∃ #j. (!KU( a ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #i)) )
+      case case_1
+      solve( !Factor( a ) ▶₀ #i )
+        case client_reconstruct_phase1
+        by contradiction /* from formulas */
+      next
+        case server_reconstruct_phase1
+        solve( SCServerIn( $client.1, $sid, <$cid, a, s_enc_share, kvfy>
+               ) ▶₁ #vr.1 )
+          case server_in_case_1
+          by contradiction /* from formulas */
+        next
+          case server_in_case_2
+          by contradiction /* from formulas */
+        next
+          case server_in_case_3
+          by contradiction /* from formulas */
+        next
+          case server_in_case_4
+          by contradiction /* from formulas */
+        qed
+      qed
+    next
+      case case_2
+      by contradiction /* from formulas */
+    next
+      case case_3
+      by contradiction /* from formulas */
+    qed
+  qed
+qed
+
+lemma executability:
+  exists-trace
+  "((((¬(∃ #i. AdversaryAction( ) @ #i)) ∧
+      (∀ cid pw1 pw2 secret1 secret2 #i #j.
+        ((ClientRegister( cid, pw1, secret1 ) @ #i) ∧
+         (ClientRegister( cid, pw2, secret2 ) @ #j)) ⇒
+        (#i = #j))) ∧
+     (∀ cid pw1 pw2 #i #j.
+       ((ClientReconstructPhase1( cid, pw1 ) @ #i) ∧
+        (ClientReconstructPhase1( cid, pw2 ) @ #j)) ⇒
+       (#i = #j))) ∧
+    (∀ sid #i #j.
+      ((ServerReconstructPhase1( sid ) @ #i) ∧
+       (ServerReconstructPhase1( sid ) @ #j)) ⇒
+      (#i = #j))) ∧
+   (∃ cid pw secret #i #j #k #l.
+     (((ClientRegister( cid, pw, secret ) @ #i) ∧
+       (ClientReconstructPhase1( cid, pw ) @ #j)) ∧
+      (ClientReconstructPhase2( cid, pw ) @ #k)) ∧
+     (ClientReconstructFinish( cid, pw, secret ) @ #l))"
+/*
+guarded formula characterizing all satisfying traces:
+"(∀ #i. (AdversaryAction( ) @ #i) ⇒ ⊥) ∧
+ (∀ cid pw1 pw2 secret1 secret2 #i #j.
+   (ClientRegister( cid, pw1, secret1 ) @ #i) ∧
+   (ClientRegister( cid, pw2, secret2 ) @ #j)
+  ⇒
+   #i = #j) ∧
+ (∀ cid pw1 pw2 #i #j.
+   (ClientReconstructPhase1( cid, pw1 ) @ #i) ∧
+   (ClientReconstructPhase1( cid, pw2 ) @ #j)
+  ⇒
+   #i = #j) ∧
+ (∀ sid #i #j.
+   (ServerReconstructPhase1( sid ) @ #i) ∧
+   (ServerReconstructPhase1( sid ) @ #j)
+  ⇒
+   #i = #j) ∧
+ (∃ cid pw secret #i #j #k #l.
+   (ClientRegister( cid, pw, secret ) @ #i) ∧
+   (ClientReconstructPhase1( cid, pw ) @ #j) ∧
+   (ClientReconstructPhase2( cid, pw ) @ #k) ∧
+   (ClientReconstructFinish( cid, pw, secret ) @ #l))"
+*/
+simplify
+solve( Client_0( $cid, ~pw, ~secret ) ▶₀ #i )
+  case client_initialise
+  solve( !Server( $sid1 ) ▶₇ #i )
+    case create_server
+    solve( !Server( $sid2 ) ▶₈ #i )
+      case create_server
+      solve( !Server( $sid3 ) ▶₉ #i )
+        case create_server
+        solve( !Client_1( $cid, ~pw, $sid1.1, $sid2.1, $sid3.1 ) ▶₀ #j )
+          case client_register
+          solve( Client_2( $cid, ~pw, $sid1.1, $sid2.1, $sid3.1, ~b.1
+                 ) ▶₀ #k )
+            case client_reconstruct_phase1
+            solve( SCClientIn( $cid, $sid1, mul((~b++koprf1.1), hpw) ) ▶₁ #k )
+              case client_in_case_1
+              by contradiction /* from formulas */
+            next
+              case client_in_case_2
+              solve( SCClientIn( $cid, $sid2, mul((~b++koprf2.1), hpw) ) ▶₂ #k )
+                case client_in_case_1
+                by contradiction /* from formulas */
+              next
+                case client_in_case_2
+                solve( SCClientIn( $cid, $sid3, mul((~b++koprf3.1), hpw) ) ▶₃ #k )
+                  case client_in_case_1
+                  by contradiction /* from formulas */
+                next
+                  case client_in_case_2
+                  solve( Client_3( $cid, ~pw, kauth, $sid1.1, $sid2.1, $sid3.1
+                         ) ▶₀ #l )
+                    case client_reconstruct_phase2_case_01
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_02
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_03
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_04
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_05
+                    solve( SCClientIn( $cid, $sid1, s_enc1.1 ) ▶₁ #l )
+                      case client_in_case_1
+                      by contradiction /* from formulas */
+                    next
+                      case client_in_case_2
+                      by sorry
+                    next
+                      case client_in_case_3
+                      solve( SCClientIn( $cid, $sid2, s_enc2.1 ) ▶₂ #l )
+                        case client_in_case_1
+                        by contradiction /* from formulas */
+                      next
+                        case client_in_case_2
+                        by sorry
+                      next
+                        case client_in_case_3
+                        solve( SCClientIn( $cid, $sid3, s_enc3.1 ) ▶₃ #l )
+                          case client_in_case_1
+                          by contradiction /* from formulas */
+                        next
+                          case client_in_case_2
+                          by sorry
+                        next
+                          case client_in_case_3
+                          solve( !KU( senc(~secret,
+                                           KDF(x,
+                                               h(<~pw, mul((koprf1.1++koprf2.1++koprf3.1), hpw)>)))
+                                 ) @ #vk )
+                            case c_senc
+                            by sorry
+                          next
+                            case client_register_case_1
+                            solve( splitEqs(0) )
+                              case split
+                              solve( SCServerIn( $cid, $sid1, <$cid.1, mul(~b, h(~pw))>
+                                     ) ▶₁ #vr.6 )
+                                case server_in_case_1
+                                by contradiction /* from formulas */
+                              next
+                                case server_in_case_2
+                                solve( SCServerIn( $client, $sid1,
+                                                   <$cid, ~koprf1, s_enc_share, pk(x)>
+                                       ) ▶₁ #vr.7 )
+                                  case server_in_case_1
+                                  by contradiction /* from formulas */
+                                next
+                                  case server_in_case_2
+                                  solve( SCServerIn( $cid, $sid2, <$cid.1, mul(~b, h(~pw))>
+                                         ) ▶₁ #vr.11 )
+                                    case server_in_case_1
+                                    by contradiction /* from formulas */
+                                  next
+                                    case server_in_case_2
+                                    solve( SCServerIn( $client, $sid2,
+                                                       <$cid, ~koprf2, s_enc2.1, pk(x)>
+                                           ) ▶₁ #vr.12 )
+                                      case server_in_case_1
+                                      by contradiction /* from formulas */
+                                    next
+                                      case server_in_case_2
+                                      solve( SCServerIn( $cid, $sid3, <$cid.1, mul(~b, h(~pw))>
+                                             ) ▶₁ #vr.16 )
+                                        case server_in_case_1
+                                        by contradiction /* from formulas */
+                                      next
+                                        case server_in_case_2
+                                        solve( SCServerIn( $client, $sid3,
+                                                           <$cid, ~koprf3, ~s_enc3, pk(x)>
+                                               ) ▶₁ #vr.17 )
+                                          case server_in_case_1
+                                          by contradiction /* from formulas */
+                                        next
+                                          case server_in_case_2
+                                          solve( SCServerIn( $cid, $sid1,
+                                                             sign(h(mul(~b, h(~pw))),
+                                                                  KDF(h(<~pw, 
+                                                                         mul((~koprf1++~koprf2++
+                                                                              ~koprf3),
+                                                                             h(~pw))
+                                                                        >),
+                                                                      '1'))
+                                                 ) ▶₁ #vr.21 )
+                                            case server_in_case_1
+                                            by contradiction /* from formulas */
+                                          next
+                                            case server_in_case_2
+                                            solve( SCServerIn( $cid, $sid2,
+                                                               sign(h(mul(~b, h(~pw))),
+                                                                    KDF(h(<~pw, 
+                                                                           mul((~koprf1++~koprf2++
+                                                                                ~koprf3),
+                                                                               h(~pw))
+                                                                          >),
+                                                                        '2'))
+                                                   ) ▶₁ #vr.24 )
+                                              case server_in_case_1
+                                              by contradiction /* from formulas */
+                                            next
+                                              case server_in_case_2
+                                              solve( SCServerIn( $cid, $sid3,
+                                                                 sign(h(mul(~b, h(~pw))),
+                                                                      KDF(h(<~pw, 
+                                                                             mul((~koprf1++~koprf2++
+                                                                                  ~koprf3),
+                                                                                 h(~pw))
+                                                                            >),
+                                                                          '3'))
+                                                     ) ▶₁ #vr.27 )
+                                                case server_in_case_1
+                                                by contradiction /* from formulas */
+                                              next
+                                                case server_in_case_2
+                                                SOLVED // trace found
+                                              qed
+                                            qed
+                                          qed
+                                        qed
+                                      qed
+                                    qed
+                                  qed
+                                qed
+                              qed
+                            qed
+                          next
+                            case client_register_case_2
+                            by sorry
+                          next
+                            case client_register_case_3
+                            by sorry
+                          next
+                            case client_register_case_4
+                            by sorry
+                          next
+                            case client_register_case_5
+                            by sorry
+                          next
+                            case client_register_case_6
+                            by sorry
+                          qed
+                        qed
+                      qed
+                    qed
+                  next
+                    case client_reconstruct_phase2_case_06
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_07
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_08
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_09
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_10
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_11
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_12
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_13
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_14
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_15
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_16
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_17
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_18
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_19
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_20
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_21
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_22
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_23
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_24
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_25
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_26
+                    by sorry
+                  next
+                    case client_reconstruct_phase2_case_27
+                    by sorry
+                  qed
+                next
+                  case client_in_case_3
+                  by sorry
+                next
+                  case client_in_case_4
+                  by sorry
+                next
+                  case client_in_case_5
+                  by sorry
+                next
+                  case client_in_case_6
+                  by sorry
+                qed
+              next
+                case client_in_case_3
+                by sorry
+              next
+                case client_in_case_4
+                by sorry
+              next
+                case client_in_case_5
+                by sorry
+              next
+                case client_in_case_6
+                by sorry
+              qed
+            next
+              case client_in_case_3
+              by sorry
+            next
+              case client_in_case_4
+              by sorry
+            next
+              case client_in_case_5
+              by sorry
+            next
+              case client_in_case_6
+              by sorry
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma secret_koprf_pre_quantum:
+  all-traces
+  "∀ koprf cid sid1 sid2 sid3 #i.
+    (Secret( 'koprf', koprf, cid, sid1, sid2, sid3 ) @ #i) ⇒
+    (((¬(∃ #j. K( koprf ) @ #j)) ∨
+      (∃ #j #k #l.
+        ((!Compromised( sid1 ) @ #j) ∧ (!Compromised( sid2 ) @ #k)) ∧
+        (!Compromised( sid3 ) @ #l))) ∨
+     (∃ #j. PQAdversaryAction( ) @ #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ koprf cid sid1 sid2 sid3 #i.
+  (Secret( 'koprf', koprf, cid, sid1, sid2, sid3 ) @ #i)
+ ∧
+  (∃ #j. (K( koprf ) @ #j)) ∧
+  (∀ #j #k #l.
+    (!Compromised( sid1 ) @ #j) ∧
+    (!Compromised( sid2 ) @ #k) ∧
+    (!Compromised( sid3 ) @ #l)
+   ⇒
+    ⊥) ∧
+  (∀ #j. (PQAdversaryAction( ) @ #j) ⇒ ⊥)"
+*/
+simplify
+solve( Secret( 'koprf', koprf, cid, sid1, sid2, sid3 ) @ #i )
+  case client_register
+  solve( Client_0( $cid, ~pw, ~secret ) ▶₀ #i )
+    case client_initialise
+    solve( !Server( $sid1 ) ▶₇ #i )
+      case create_server
+      solve( !Server( $sid2 ) ▶₈ #i )
+        case create_server
+        solve( !Server( $sid3 ) ▶₉ #i )
+          case create_server
+          solve( !KU( ~koprf1 ) @ #vk.1 )
+            case eavesdrop_server
+            solve( !KU( ~koprf2 ) @ #vk.2 )
+              case eavesdrop_server
+              solve( !KU( ~koprf3 ) @ #vk.3 )
+                case eavesdrop_server
+                by contradiction /* from formulas */
+              next
+                case solve_dlog
+                by contradiction /* from formulas */
+              qed
+            next
+              case solve_dlog
+              by contradiction /* from formulas */
+            qed
+          next
+            case solve_dlog
+            by contradiction /* from formulas */
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma secret_kauth_pre_quantum:
+  all-traces
+  "∀ kauth cid sid1 sid2 sid3 #i.
+    (Secret( 'kauth', kauth, cid, sid1, sid2, sid3 ) @ #i) ⇒
+    (((¬(∃ #j. K( kauth ) @ #j)) ∨
+      (∃ #j #k #l.
+        ((!Compromised( sid1 ) @ #j) ∧ (!Compromised( sid2 ) @ #k)) ∧
+        (!Compromised( sid3 ) @ #l))) ∨
+     (∃ #j. PQAdversaryAction( ) @ #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ kauth cid sid1 sid2 sid3 #i.
+  (Secret( 'kauth', kauth, cid, sid1, sid2, sid3 ) @ #i)
+ ∧
+  (∃ #j. (K( kauth ) @ #j)) ∧
+  (∀ #j #k #l.
+    (!Compromised( sid1 ) @ #j) ∧
+    (!Compromised( sid2 ) @ #k) ∧
+    (!Compromised( sid3 ) @ #l)
+   ⇒
+    ⊥) ∧
+  (∀ #j. (PQAdversaryAction( ) @ #j) ⇒ ⊥)"
+*/
+simplify
+solve( Secret( 'kauth', kauth, cid, sid1, sid2, sid3 ) @ #i )
+  case client_register
+  solve( Client_0( $cid, ~pw, ~secret ) ▶₀ #i )
+    case client_initialise
+    solve( !Server( $sid1 ) ▶₇ #i )
+      case create_server
+      solve( !Server( $sid2 ) ▶₈ #i )
+        case create_server
+        solve( !Server( $sid3 ) ▶₉ #i )
+          case create_server
+          solve( !KU( h(<~pw, mul((~koprf1++~koprf2++~koprf3), h(~pw))>)
+                 ) @ #vk )
+            case c_h
+            solve( !KU( ~pw ) @ #vk.2 )
+              case leak_case_01
+              by sorry
+            next
+              case leak_case_02
+              by sorry
+            next
+              case leak_case_03
+              by sorry
+            next
+              case leak_case_04
+              by sorry
+            next
+              case leak_case_05
+              by sorry
+            next
+              case leak_case_06
+              by sorry
+            next
+              case leak_case_07
+              by sorry
+            next
+              case leak_case_08
+              by sorry
+            next
+              case leak_case_09
+              by sorry
+            next
+              case leak_case_10
+              by sorry
+            next
+              case leak_case_11
+              by sorry
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma secret_kenc_pre_quantum:
+  all-traces
+  "∀ kenc cid sid1 sid2 sid3 #i.
+    (Secret( 'kenc', kenc, cid, sid1, sid2, sid3 ) @ #i) ⇒
+    (((¬(∃ #j. K( kenc ) @ #j)) ∨
+      (∃ #j #k #l.
+        ((!Compromised( sid1 ) @ #j) ∧ (!Compromised( sid2 ) @ #k)) ∧
+        (!Compromised( sid3 ) @ #l))) ∨
+     (∃ #j. PQAdversaryAction( ) @ #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ kenc cid sid1 sid2 sid3 #i.
+  (Secret( 'kenc', kenc, cid, sid1, sid2, sid3 ) @ #i)
+ ∧
+  (∃ #j. (K( kenc ) @ #j)) ∧
+  (∀ #j #k #l.
+    (!Compromised( sid1 ) @ #j) ∧
+    (!Compromised( sid2 ) @ #k) ∧
+    (!Compromised( sid3 ) @ #l)
+   ⇒
+    ⊥) ∧
+  (∀ #j. (PQAdversaryAction( ) @ #j) ⇒ ⊥)"
+*/
+by sorry
+
+lemma secret_secret_pre_quantum:
+  all-traces
+  "∀ secret cid sid1 sid2 sid3 #i.
+    (Secret( 'secret', secret, cid, sid1, sid2, sid3 ) @ #i) ⇒
+    (((¬(∃ #j. K( secret ) @ #j)) ∨
+      (∃ #j #k #l.
+        ((!Compromised( sid1 ) @ #j) ∧ (!Compromised( sid2 ) @ #k)) ∧
+        (!Compromised( sid3 ) @ #l))) ∨
+     (∃ #j. PQAdversaryAction( ) @ #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ secret cid sid1 sid2 sid3 #i.
+  (Secret( 'secret', secret, cid, sid1, sid2, sid3 ) @ #i)
+ ∧
+  (∃ #j. (K( secret ) @ #j)) ∧
+  (∀ #j #k #l.
+    (!Compromised( sid1 ) @ #j) ∧
+    (!Compromised( sid2 ) @ #k) ∧
+    (!Compromised( sid3 ) @ #l)
+   ⇒
+    ⊥) ∧
+  (∀ #j. (PQAdversaryAction( ) @ #j) ⇒ ⊥)"
+*/
+by sorry
+
+lemma secret_koprf_post_quantum:
+  all-traces
+  "∀ koprf cid sid1 sid2 sid3 #i.
+    (Secret( 'koprf', koprf, cid, sid1, sid2, sid3 ) @ #i) ⇒
+    ((¬(∃ #j. K( koprf ) @ #j)) ∨
+     (∃ #j #k #l.
+       ((!Compromised( sid1 ) @ #j) ∧ (!Compromised( sid2 ) @ #k)) ∧
+       (!Compromised( sid3 ) @ #l)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ koprf cid sid1 sid2 sid3 #i.
+  (Secret( 'koprf', koprf, cid, sid1, sid2, sid3 ) @ #i)
+ ∧
+  (∃ #j. (K( koprf ) @ #j)) ∧
+  (∀ #j #k #l.
+    (!Compromised( sid1 ) @ #j) ∧
+    (!Compromised( sid2 ) @ #k) ∧
+    (!Compromised( sid3 ) @ #l)
+   ⇒
+    ⊥)"
+*/
+simplify
+solve( Secret( 'koprf', koprf, cid, sid1, sid2, sid3 ) @ #i )
+  case client_register
+  solve( Client_0( $cid, ~pw, ~secret ) ▶₀ #i )
+    case client_initialise
+    solve( !Server( $sid1 ) ▶₇ #i )
+      case create_server
+      solve( !Server( $sid2 ) ▶₈ #i )
+        case create_server
+        solve( !Server( $sid3 ) ▶₉ #i )
+          case create_server
+          solve( !KU( ~koprf1 ) @ #vk.1 )
+            case eavesdrop_server
+            solve( !KU( ~koprf2 ) @ #vk.2 )
+              case eavesdrop_server
+              solve( !KU( ~koprf3 ) @ #vk.3 )
+                case solve_dlog
+                solve( splitEqs(0) )
+                  case split
+                  solve( SCServerIn( $client, $sid, <$cid.1, mul(factors, hpw)>
+                         ) ▶₁ #vr.17 )
+                    case server_in_case_1
+                    solve( SCServerIn( $client, $sid,
+                                       <$cid.1, ~koprf3, s_enc_share, kvfy>
+                           ) ▶₁ #vr.18 )
+                      case server_in_case_2
+                      solve( !KU( mul(factors, hpw) ) @ #vk.6 )
+                        case add
+                        solve( !KU( mul(b, hpw) ) @ #vk.8 )
+                          case add
+                          solve( !KU( mul(b, hpw) ) @ #vk.10 )
+                            case c_mul
+                            SOLVED // trace found
+                          qed
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma secret_kauth_post_quantum:
+  all-traces
+  "∀ kauth cid sid1 sid2 sid3 #i.
+    (Secret( 'kauth', kauth, cid, sid1, sid2, sid3 ) @ #i) ⇒
+    ((¬(∃ #j. K( kauth ) @ #j)) ∨
+     (∃ #j #k #l.
+       ((!Compromised( sid1 ) @ #j) ∧ (!Compromised( sid2 ) @ #k)) ∧
+       (!Compromised( sid3 ) @ #l)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ kauth cid sid1 sid2 sid3 #i.
+  (Secret( 'kauth', kauth, cid, sid1, sid2, sid3 ) @ #i)
+ ∧
+  (∃ #j. (K( kauth ) @ #j)) ∧
+  (∀ #j #k #l.
+    (!Compromised( sid1 ) @ #j) ∧
+    (!Compromised( sid2 ) @ #k) ∧
+    (!Compromised( sid3 ) @ #l)
+   ⇒
+    ⊥)"
+*/
+simplify
+solve( Secret( 'kauth', kauth, cid, sid1, sid2, sid3 ) @ #i )
+  case client_register
+  solve( Client_0( $cid, ~pw, ~secret ) ▶₀ #i )
+    case client_initialise
+    solve( !Server( $sid1 ) ▶₇ #i )
+      case create_server
+      solve( !Server( $sid2 ) ▶₈ #i )
+        case create_server
+        solve( !Server( $sid3 ) ▶₉ #i )
+          case create_server
+          solve( !KU( h(<~pw, mul((~koprf1++~koprf2++~koprf3), h(~pw))>)
+                 ) @ #vk )
+            case c_h
+            solve( !KU( ~pw ) @ #vk.2 )
+              case leak_case_01
+              by sorry
+            next
+              case leak_case_02
+              by sorry
+            next
+              case leak_case_03
+              by sorry
+            next
+              case leak_case_04
+              by sorry
+            next
+              case leak_case_05
+              by sorry
+            next
+              case leak_case_06
+              by sorry
+            next
+              case leak_case_07
+              by sorry
+            next
+              case leak_case_08
+              by sorry
+            next
+              case leak_case_09
+              by sorry
+            next
+              case leak_case_10
+              solve( !KU( mul((~koprf1++~koprf2++~koprf3), h(~pw)) ) @ #vk.3 )
+                case add_case_1
+                solve( !KU( ~koprf1 ) @ #vk.5 )
+                  case eavesdrop_server
+                  solve( !KU( mul((~koprf2++~koprf3), h(~pw)) ) @ #vk.6 )
+                    case add_case_1
+                    solve( !KU( ~koprf2 ) @ #vk.7 )
+                      case eavesdrop_server
+                      solve( !KU( mul(~koprf3, h(~pw)) ) @ #vk.8 )
+                        case c_mul
+                        solve( !KU( ~koprf3 ) @ #vk.9 )
+                          case eavesdrop_server
+                          by contradiction /* from formulas */
+                        next
+                          case solve_dlog
+                          solve( !KU( h(~pw) ) @ #vk.10 )
+                            case c_h
+                            solve( splitEqs(0) )
+                              case split
+                              solve( !Weak( f ) ▶₀ #vr.5 )
+                                case leak_weak_case_01
+                                by sorry
+                              next
+                                case leak_weak_case_02
+                                by sorry
+                              next
+                                case leak_weak_case_03
+                                by sorry
+                              next
+                                case leak_weak_case_04
+                                by sorry
+                              next
+                                case leak_weak_case_05
+                                by sorry
+                              next
+                                case leak_weak_case_06
+                                by sorry
+                              next
+                                case leak_weak_case_07
+                                by sorry
+                              next
+                                case leak_weak_case_08
+                                by sorry
+                              next
+                                case leak_weak_case_09
+                                by sorry
+                              next
+                                case leak_weak_case_10
+                                by sorry
+                              next
+                                case leak_weak_case_11
+                                by sorry
+                              next
+                                case leak_weak_case_12
+                                by sorry
+                              next
+                                case weak_value
+                                solve( !Weak( x ) ▶₁ #vr.5 )
+                                  case leak_weak_case_01
+                                  by sorry
+                                next
+                                  case leak_weak_case_02
+                                  by sorry
+                                next
+                                  case leak_weak_case_03
+                                  by sorry
+                                next
+                                  case leak_weak_case_04
+                                  solve( !Weak( x ) ▶₀ #vr.26 )
+                                    case leak_weak_case_01
+                                    solve( !KU( mul(f, h(~pw.1)) ) @ #vk.10 )
+                                      case add
+                                      by sorry
+                                    next
+                                      case adversary_recv_case_1
+                                      by sorry
+                                    next
+                                      case adversary_recv_case_2
+                                      by sorry
+                                    next
+                                      case c_mul
+                                      by sorry
+                                    next
+                                      case combine
+                                      by sorry
+                                    next
+                                      case eavesdrop_server_case_1
+                                      solve( !KU( ~b ) @ #vk.11 )
+                                        case solve_dlog_case_1
+                                        solve( ~pw ⊏ mul(~b, h(~pw.1)) )
+                                          case SubtermSplit1
+                                          by contradiction /* contradictory subterm store */
+                                        next
+                                          case SubtermSplit2
+                                          solve( ~pw ⊏ h(~pw.1) )
+                                            case SubtermSplit1
+                                            by contradiction /* contradictory subterm store */
+                                          next
+                                            case SubtermSplit2
+                                            solve( SCServerIn( $client, $sid,
+                                                               <$cid.1, mul(factors, hpw)>
+                                                   ) ▶₁ #vr.21 )
+                                              case server_in_case_1
+                                              solve( SCServerIn( $client, $sid,
+                                                                 <$cid.1, ~koprf3, s_enc_share, kvfy
+                                                                 >
+                                                     ) ▶₁ #vr.22 )
+                                                case server_in_case_1
+                                                by contradiction /* cyclic */
+                                              next
+                                                case server_in_case_2
+                                                solve( !KU( mul(factors, hpw) ) @ #vk.14 )
+                                                  case add
+                                                  by sorry
+                                                next
+                                                  case adversary_recv_case_1
+                                                  by sorry
+                                                next
+                                                  case adversary_recv_case_2
+                                                  by sorry
+                                                next
+                                                  case c_mul
+                                                  SOLVED // trace found
+                                                next
+                                                  case combine
+                                                  by sorry
+                                                next
+                                                  case eavesdrop_server_case_1
+                                                  by sorry
+                                                next
+                                                  case eavesdrop_server_case_2
+                                                  by sorry
+                                                next
+                                                  case eavesdrop_server_case_3
+                                                  by sorry
+                                                next
+                                                  case remove
+                                                  by sorry
+                                                qed
+                                              qed
+                                            next
+                                              case server_in_case_2
+                                              by sorry
+                                            next
+                                              case server_in_case_3
+                                              by sorry
+                                            next
+                                              case server_in_case_4
+                                              by sorry
+                                            qed
+                                          qed
+                                        qed
+                                      next
+                                        case solve_dlog_case_2
+                                        by sorry
+                                      qed
+                                    next
+                                      case eavesdrop_server_case_2
+                                      by sorry
+                                    next
+                                      case eavesdrop_server_case_3
+                                      by sorry
+                                    next
+                                      case remove
+                                      by sorry
+                                    qed
+                                  next
+                                    case leak_weak_case_02
+                                    by sorry
+                                  next
+                                    case leak_weak_case_03
+                                    by sorry
+                                  next
+                                    case leak_weak_case_04
+                                    by sorry
+                                  next
+                                    case leak_weak_case_05
+                                    by sorry
+                                  next
+                                    case leak_weak_case_06
+                                    by sorry
+                                  next
+                                    case leak_weak_case_07
+                                    by sorry
+                                  next
+                                    case leak_weak_case_08
+                                    by sorry
+                                  next
+                                    case leak_weak_case_09
+                                    by sorry
+                                  next
+                                    case leak_weak_case_10
+                                    by sorry
+                                  next
+                                    case leak_weak_case_11
+                                    by sorry
+                                  next
+                                    case leak_weak_case_12
+                                    by sorry
+                                  next
+                                    case weak_value
+                                    by sorry
+                                  qed
+                                next
+                                  case leak_weak_case_05
+                                  by sorry
+                                next
+                                  case leak_weak_case_06
+                                  by sorry
+                                next
+                                  case leak_weak_case_07
+                                  by sorry
+                                next
+                                  case leak_weak_case_08
+                                  by sorry
+                                next
+                                  case leak_weak_case_09
+                                  by sorry
+                                next
+                                  case leak_weak_case_10
+                                  by sorry
+                                next
+                                  case leak_weak_case_11
+                                  by sorry
+                                next
+                                  case leak_weak_case_12
+                                  by sorry
+                                next
+                                  case weak_value
+                                  by sorry
+                                qed
+                              qed
+                            qed
+                          next
+                            case extract
+                            by sorry
+                          qed
+                        qed
+                      next
+                        case remove
+                        by sorry
+                      qed
+                    next
+                      case solve_dlog
+                      by sorry
+                    qed
+                  next
+                    case add_case_2
+                    by sorry
+                  next
+                    case adversary_recv_case_1
+                    by sorry
+                  next
+                    case adversary_recv_case_2
+                    by sorry
+                  next
+                    case adversary_recv_case_3
+                    by sorry
+                  next
+                    case adversary_recv_case_4
+                    by sorry
+                  next
+                    case c_mul
+                    by sorry
+                  next
+                    case combine_case_1
+                    by sorry
+                  next
+                    case combine_case_2
+                    by sorry
+                  next
+                    case remove
+                    by sorry
+                  qed
+                next
+                  case solve_dlog
+                  by sorry
+                qed
+              next
+                case add_case_2
+                by sorry
+              next
+                case add_case_3
+                by sorry
+              next
+                case add_case_4
+                by sorry
+              next
+                case add_case_5
+                by sorry
+              next
+                case add_case_6
+                by sorry
+              next
+                case adversary_recv_case_01
+                by sorry
+              next
+                case adversary_recv_case_02
+                by sorry
+              next
+                case adversary_recv_case_03
+                by sorry
+              next
+                case adversary_recv_case_04
+                by sorry
+              next
+                case adversary_recv_case_05
+                by sorry
+              next
+                case adversary_recv_case_06
+                by sorry
+              next
+                case adversary_recv_case_07
+                by sorry
+              next
+                case adversary_recv_case_08
+                by sorry
+              next
+                case adversary_recv_case_09
+                by sorry
+              next
+                case adversary_recv_case_10
+                by sorry
+              next
+                case adversary_recv_case_11
+                by sorry
+              next
+                case adversary_recv_case_12
+                by sorry
+              next
+                case c_mul
+                by sorry
+              next
+                case combine_case_1
+                by sorry
+              next
+                case combine_case_2
+                by sorry
+              next
+                case combine_case_3
+                by sorry
+              next
+                case combine_case_4
+                by sorry
+              next
+                case combine_case_5
+                by sorry
+              next
+                case combine_case_6
+                by sorry
+              next
+                case remove
+                by sorry
+              qed
+            next
+              case leak_case_11
+              by sorry
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma secret_kenc_post_quantum:
+  all-traces
+  "∀ kenc cid sid1 sid2 sid3 #i.
+    (Secret( 'kenc', kenc, cid, sid1, sid2, sid3 ) @ #i) ⇒
+    ((¬(∃ #j. K( kenc ) @ #j)) ∨
+     (∃ #j #k #l.
+       ((!Compromised( sid1 ) @ #j) ∧ (!Compromised( sid2 ) @ #k)) ∧
+       (!Compromised( sid3 ) @ #l)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ kenc cid sid1 sid2 sid3 #i.
+  (Secret( 'kenc', kenc, cid, sid1, sid2, sid3 ) @ #i)
+ ∧
+  (∃ #j. (K( kenc ) @ #j)) ∧
+  (∀ #j #k #l.
+    (!Compromised( sid1 ) @ #j) ∧
+    (!Compromised( sid2 ) @ #k) ∧
+    (!Compromised( sid3 ) @ #l)
+   ⇒
+    ⊥)"
+*/
+by sorry
+
+lemma secret_secret_post_quantum:
+  all-traces
+  "∀ secret cid sid1 sid2 sid3 #i.
+    (Secret( 'secret', secret, cid, sid1, sid2, sid3 ) @ #i) ⇒
+    ((¬(∃ #j. K( secret ) @ #j)) ∨
+     (∃ #j #k #l.
+       ((!Compromised( sid1 ) @ #j) ∧ (!Compromised( sid2 ) @ #k)) ∧
+       (!Compromised( sid3 ) @ #l)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ secret cid sid1 sid2 sid3 #i.
+  (Secret( 'secret', secret, cid, sid1, sid2, sid3 ) @ #i)
+ ∧
+  (∃ #j. (K( secret ) @ #j)) ∧
+  (∀ #j #k #l.
+    (!Compromised( sid1 ) @ #j) ∧
+    (!Compromised( sid2 ) @ #k) ∧
+    (!Compromised( sid3 ) @ #l)
+   ⇒
+    ⊥)"
+*/
+by sorry
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* All wellformedness checks were successful. */
+
+/*
+Generated from:
+Tamarin version 1.10.0
+Maude version 3.5
+Git revision: cb62c305f8c8b8c1e664152aa33c95b7b8d5ef32, branch: master
+Compiled at: 2024-12-03 08:06:20.760161909 UTC
+*/
+
+end

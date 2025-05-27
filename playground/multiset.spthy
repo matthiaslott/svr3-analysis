@@ -1,0 +1,16 @@
+theory Multiset
+
+begin
+
+builtins: multiset
+
+rule leak_multiset:
+    [ Fr(~secret)]
+  --[ Secret(~secret) ]->
+    [ Out(~secret ++ $public) ]
+
+// As expected: 
+lemma secrecy:
+    "All secret #i. Secret(secret)@#i ==> not (Ex #j. !KU(secret)@#j)"
+
+end
