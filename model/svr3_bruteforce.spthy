@@ -22,7 +22,7 @@ theory SVR3_Bruteforce
 
 begin
 
-builtins: xor, hashing, symmetric-encryption, signing, multiset
+builtins: xor, hashing, symmetric-encryption, revealing-signing, multiset
 
 predicates:
     NEQ(x, y) <=> not (x = y)
@@ -57,31 +57,31 @@ rule compromise_server[color=#d66f7c]:
     [ !Compromised($sid) ]
 
 // Scalar Multiplication & DLOG
-rule combine[no_derivcheck, color=#d66f7c]:
+rule combine[no_derivcheck, color=#d66f7c]: // [a]x, [b]x -> [a*b]x
     [ In(mul(a, x)), In(mul(b, x)) ]
   --[ AdversaryAction()
     , SourcesPoint(x) ]->
     [ Out(mul(a ++ b, x)) ]
 
-rule add[no_derivcheck, color=#d66f7c]:
+rule add[no_derivcheck, color=#d66f7c]: // a, [b]x -> [a*b]x
     [ In(a), In(mul(b, x)) ]
   --[ AdversaryAction()
     , SourcesPoint(x) ]->
     [ Out(mul(a ++ b, x)) ]
 
-rule remove[no_derivcheck, color=#d66f7c]:
+rule remove[no_derivcheck, color=#d66f7c]: // a, [a*b]x -> [b]x
     [ In(a), In(mul(a ++ b, x)) ]
   --[ AdversaryAction()
     , SourcesPoint(x) ]->
     [ Out(mul(b, x)) ]
 
-rule extract[no_derivcheck, color=#d66f7c]:
+rule extract[no_derivcheck, color=#d66f7c]: // a, [a]x -> x
     [ In(a), In(mul(a, x)) ]
   --[ AdversaryAction()
     , SourcesPoint(x) ]->
     [ Out(x) ]
 
-rule solve_dlog[no_derivcheck, color=#d66f7c]:
+rule solve_dlog[no_derivcheck, color=#d66f7c]: // [f]x -> f
     [ !Factor(f) ]
   --[ AdversaryAction()
     , PQAdversaryAction()
@@ -90,54 +90,44 @@ rule solve_dlog[no_derivcheck, color=#d66f7c]:
 
 // Bruteforce Attacks
 
-rule weak_value:
-    [ In(v) ]-->[ !Weak(v) ]
+rule weak_hg: // considers only fresh values because HumanGenerated values are guaranteed to be fresh
+    [ !HumanGenerated(~v) ]-->[ !Weak(~v) ]
+// adversarially known values are weak. Here, only the leaves of the syntax tree (public/fresh values) are considered because weakness propagates from the leaves
+rule weak_known_fresh:
+    [ In(~v) ]-->[ !Weak(~v) ]
+rule weak_known_public:
+    []-->[ !Weak($v) ]
 
+// weakness propagation rules
 rule weak_pair: // there are only few candidates for <x, y> if there are few candidates for x and y respectively
-    [ !Weak(x), !Weak(y)]--[]->[ !Weak(<x, y>) ]
-/*rule weak_xor: // there are only few candidates for x XOR y if there are few candidates for x and y respectively
+    [ !Weak(x), !Weak(y) ]-->[ !Weak(<x, y>) ]
+// fst/snd need not be considered, because the equational theory rewrites them
+rule weak_xor: // there are only few candidates for x XOR y if there are few candidates for x and y respectively
     [ !Weak(x), !Weak(y) ]-->[ !Weak(x XOR y) ]
-*/rule weak_hash: // there are only few candidates for h(x) if there are few candidates for x
+rule weak_hash: // there are only few candidates for h(x) if there are few candidates for x
     [ !Weak(x) ]-->[ !Weak(h(x)) ]
-/*rule weak_senc: // there are only few candidates for senc(m, k) if there are few candidates for m and k
+rule weak_senc: // in the worst case, nd k
     [ !Weak(m), !Weak(k) ]-->[ !Weak(senc(m, k)) ]
-rule weak_sdec:
-    [ !Weak(c), !Weak(k) ]-->[ !Weak(sdec(c, k)) ]
-rule weak_sign:
-    [ !Weak(m), !Weak(k) ]-->[ !Weak(sign(m, k)) ]
-rule weak_verify: // TODO: Think about how to handle verify: There are always few candidates for verify(s, m, k)
-    [ !Weak(s), !Weak(m), !Weak(k) ]-->[ !Weak(verify(s, m, k)) ]
-rule weak_pk:
+// sdec need not be considered, because the participants never send messages containing sdec over the channel
+rule weak_sign: // signing is revealing, parts of sign(m, k) are weak already if only m is weak
+    [ !Weak(m), !Weak(k) ]-->[ !Weak(revealSign(m, k)) ]
+// verify/getMessage need not be considered, because the participants never send messages containing verify/getMessage over the channel
+rule weak_pk: // there are only few candidates for pk(k) if there are few candidates for x
     [ !Weak(k) ]-->[ !Weak(pk(k)) ]
-rule weak_concat:
+rule weak_concat: // there are only few candidates for x ++ y if there are few candidates for x and y respectively
     [ !Weak(x), !Weak(y) ]-->[ !Weak(x ++ y) ]
-*/rule weak_mul:
+rule weak_mul: // there are only few candidates for mul(f, x) if there are few candidates for f and x respectively
     [ !Weak(f), !Weak(x) ]-->[ !Weak(mul(f, x)) ]
-/*rule weak_kdf:
+rule weak_kdf: // there are only few candidates for KDF(x, y) if there are few candidates for x and y respecitvely
     [ !Weak(x), !Weak(y) ]-->[ !Weak(KDF(x, y)) ]
-*/
 
-// No rule for pair needed, because the adversary can extract x and y on their own if given <x, y>
-/*rule leak_xor: // If x XOR y is known and x has few candidates, it is not enough. Also y must have only few candidates
-    [ In(x XOR y), !Weak(x), !Weak(y) ]-->[ Out(x), Out(y) ]
-*/rule leak_hash: // If h(x) is known and there are few candidates x, then x can be bruteforced.
-    [ In(h(x)), !Weak(x) ]-->[ Out(x) ]
-/*rule leak_senc: // If senc(m, k) is known, it does not suffice if only keyspace or message space are small.
-    [ In(senc(m, k)), !Weak(m), !Weak(k) ]-->[ Out(m), Out(k) ]
-rule leak_sdec:
-    [ In(sdec(c, k)), !Weak(c), !Weak(k) ]-->[ Out(c), Out(k) ]
-rule leak_sign: // TODO: Think whether signing should be revealing
-    [ In(sign(m, k)), !Weak(m), !Weak(k) ]-->[ Out(m), Out(k) ]
-rule leak_verify:
-    [ !Weak(verify(s, m, k)), !Weak(s), !Weak(m), !Weak(k) ]-->[ Out(s), Out(m), Out(k) ]
-rule leak_pk:
-    [ In(pk(k)), !Weak(k) ]-->[ Out(k) ]
-// No rule for concat needed, because the adversary can extract x and y on their own if given x ++ y
-*/rule leak_mul:
-    [ In(mul(f, x)), !Weak(f), !Weak(x) ]-->[ Out(f), Out(x) ]
-/*rule leak_kdf:
-    [ In(KDF(x, y)), !Weak(x), !Weak(y) ]-->[ Out(x), Out(y) ]
-*/
+rule bruteforce: // adversary can bruteforce a subterm if the weakness propagates to a value that the adversary knows
+    [ !HumanGenerated(x), In(y), !Weak(y) ]
+  --[ _restrict(x << y)
+    , AdversaryAction() ]->
+    [ Out(x) ]
+
+
 
 // Protocol
 // Initialisation of the client with password and secret to be protected.
@@ -147,7 +137,7 @@ rule client_initialise[color=#77b58d]:
   --[
       _restrict(NEQ($cid, 'adv')) // The adversary may contact the servers, but can't operate as its own client. Without this restriction, it would be as if the adversary could compromise 1 client.
     ]->
-    [ Client_0($cid, ~pw, ~secret), !Weak(~pw) ]
+    [ Client_0($cid, ~pw, ~secret), !HumanGenerated(~pw) ]
 
 // Client Registration    
 rule client_register[color=#77b58d]:
@@ -176,6 +166,7 @@ rule client_register[color=#77b58d]:
     , SourceC(~s_enc1), SourceC(~s_enc2), SourceC(~s_enc3)
     , SourceP(h(~pw))
     , SourceF(~koprf1), SourceF(~koprf2), SourceF(~koprf3)
+    , Secret('pw', ~pw, $cid, $sid1, $sid2, $sid3)
     , Secret('koprf', koprf, $cid, $sid1, $sid2, $sid3)
     , Secret('kauth', kauth, $cid, $sid1, $sid2, $sid3)
     , Secret('kenc', kenc, $cid, $sid1, $sid2, $sid3)
@@ -238,9 +229,9 @@ rule client_reconstruct_phase2[no_derivcheck, color=#77b58d]:
         ksign3 = KDF(kauth, '3')
         B = mul(~b, h(~pw)) // was already produced once, so no need to add it as a source here
         c = h(B) // Q: Think about how to model Noise.ExportedAuthenticator and if it even needs to be modelled!
-        sig1 = sign(c, ksign1)
-        sig2 = sign(c, ksign2)
-        sig3 = sign(c, ksign3)
+        sig1 = revealSign(c, ksign1)
+        sig2 = revealSign(c, ksign2)
+        sig3 = revealSign(c, ksign3)
     in 
     [ Client_2($cid, ~pw, $sid1, $sid2, $sid3, ~b)
     , SCClientIn($cid, $sid1, mul(~b ++ koprf1, hpw))
@@ -259,7 +250,7 @@ rule server_reconstruct_phase2[color=#7793b5]:
     [ Server_2($sid, $cid, s_enc_share, kvfy, bhpw)
     , SCServerIn($client, $sid, sig) // Note: $client and $cid don't necessarily match because the client isn't authenticated.
     ]
-  --[ _restrict(verify(sig, c, kvfy) = true)
+  --[ _restrict(revealVerify(sig, c, kvfy) = true)
     , ServerAction() ]->
     [ SCServerOut($client, $sid, s_enc_share) ]
 
@@ -293,7 +284,7 @@ restriction servers_offline:
 // - SCServerOut comes from various protocol rules
 
 // SourcesPoint is like an invariant that says: The point is either h(pw) or the adversary knows it.
-lemma types [sources, heuristic={sources}]:
+lemma types[sources,heuristic={sources}]: // autoprove
     "(All msg #i.
       SourcesAdversaryRecv(msg)@#i
       ==>
@@ -337,36 +328,46 @@ lemma executability:
       )
     "
 
-lemma secret_koprf_pre_quantum:
+// Pre Quantum Lemmas
+lemma secret_pw_pre_quantum[reuse]:
+    "All pw cid sid1 sid2 sid3 #i. Secret('pw', pw, cid, sid1, sid2, sid3)@#i
+      ==> (not Ex #j. KU(pw)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
+
+lemma secret_koprf_pre_quantum[hide_lemma=secret_pw_pre_quantum]: // autoprove
     "All koprf cid sid1 sid2 sid3 #i. Secret('koprf', koprf, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. K(koprf)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
+      ==> (not Ex #j. KU(koprf)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
 
-lemma secret_kauth_pre_quantum:
+lemma secret_kauth_pre_quantum[reuse]: // autoprove
     "All kauth cid sid1 sid2 sid3 #i. Secret('kauth', kauth, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. K(kauth)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
+      ==> (not Ex #j. KU(kauth)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
 
-lemma secret_kenc_pre_quantum:
+lemma secret_kenc_pre_quantum[reuse,hide_lemma=secret_pw_pre_quantum]: // autoprove
     "All kenc cid sid1 sid2 sid3 #i. Secret('kenc', kenc, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. K(kenc)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
+      ==> (not Ex #j. KU(kenc)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
 
-lemma secret_secret_pre_quantum:
+lemma secret_secret_pre_quantum[hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum]: // autoprove
     "All secret cid sid1 sid2 sid3 #i. Secret('secret', secret, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. K(secret)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
+      ==> (not Ex #j. KU(secret)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
 
-lemma secret_koprf_post_quantum:
+// Post Quantum Lemmas
+lemma secret_pw_post_quantum[hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum,hide_lemma=secret_kenc_pre_quantum]:
+    "All pw cid sid1 sid2 sid3 #i. Secret('pw', pw, cid, sid1, sid2, sid3)@#i
+      ==> (not Ex #j. KU(pw)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
+
+lemma secret_koprf_post_quantum[hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum,hide_lemma=secret_kenc_pre_quantum]:
     "All koprf cid sid1 sid2 sid3 #i. Secret('koprf', koprf, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. K(koprf)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
+      ==> (not Ex #j. KU(koprf)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
-lemma secret_kauth_post_quantum:
+lemma secret_kauth_post_quantum[hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum,hide_lemma=secret_kenc_pre_quantum]:
     "All kauth cid sid1 sid2 sid3 #i. Secret('kauth', kauth, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. K(kauth)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
+      ==> (not Ex #j. KU(kauth)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
-lemma secret_kenc_post_quantum:
+lemma secret_kenc_post_quantum[hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum,hide_lemma=secret_kenc_pre_quantum]:
     "All kenc cid sid1 sid2 sid3 #i. Secret('kenc', kenc, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. K(kenc)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
+      ==> (not Ex #j. KU(kenc)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
-lemma secret_secret_post_quantum:
+lemma secret_secret_post_quantum[hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum,hide_lemma=secret_kenc_pre_quantum]:
     "All secret cid sid1 sid2 sid3 #i. Secret('secret', secret, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. K(secret)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
+      ==> (not Ex #j. KU(secret)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
 end

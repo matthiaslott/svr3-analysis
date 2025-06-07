@@ -59,31 +59,31 @@ rule compromise_server[color=#d66f7c]:
     [ !Compromised($sid) ]
 
 // 
-rule combine[no_derivcheck, color=#d66f7c]:
+rule combine[no_derivcheck, color=#d66f7c]: // [a]x, [b]x -> [a*b]x
     [ In(mul(a, x)), In(mul(b, x)) ]
   --[ AdversaryAction()
     , SourcesPoint(x) ]->
     [ Out(mul(a ++ b, x)) ]
 
-rule add[no_derivcheck, color=#d66f7c]:
+rule add[no_derivcheck, color=#d66f7c]: // a, [b]x -> [a*b]x
     [ In(a), In(mul(b, x)) ]
   --[ AdversaryAction()
     , SourcesPoint(x) ]->
     [ Out(mul(a ++ b, x)) ]
 
-rule remove[no_derivcheck, color=#d66f7c]:
+rule remove[no_derivcheck, color=#d66f7c]: // a, [a*b]x -> [b]x
     [ In(a), In(mul(a ++ b, x)) ]
   --[ AdversaryAction()
     , SourcesPoint(x) ]->
     [ Out(mul(b, x)) ]
 
-rule extract[no_derivcheck, color=#d66f7c]:
+rule extract[no_derivcheck, color=#d66f7c]: // a, [a]x -> x
     [ In(a), In(mul(a, x)) ]
   --[ AdversaryAction()
     , SourcesPoint(x) ]->
     [ Out(x) ]
 
-rule solve_dlog[no_derivcheck, color=#d66f7c]:
+rule solve_dlog[no_derivcheck, color=#d66f7c]: // [f]x -> f
     [ !Factor(f) ]
   --[ AdversaryAction()
     , PQAdversaryAction()
