@@ -166,11 +166,15 @@ rule client_register[color=#77b58d]:
     , SourceC(~s_enc1), SourceC(~s_enc2), SourceC(~s_enc3)
     , SourceP(h(~pw))
     , SourceF(~koprf1), SourceF(~koprf2), SourceF(~koprf3)
-    , Secret('pw', ~pw, $cid, $sid1, $sid2, $sid3)
-    , Secret('koprf', koprf, $cid, $sid1, $sid2, $sid3)
-    , Secret('kauth', kauth, $cid, $sid1, $sid2, $sid3)
-    , Secret('kenc', kenc, $cid, $sid1, $sid2, $sid3)
-    , Secret('secret', ~secret, $cid, $sid1, $sid2, $sid3) ]->
+    , Secret('pw', ~pw, $cid, <$sid1, $sid2, $sid3>)
+    , Secret('koprf', koprf, $cid, <$sid1, $sid2, $sid3>)
+    , Secret('kauth', kauth, $cid, <$sid1, $sid2, $sid3>)
+    , Secret('senc', s_enc, $cid, <$sid1, $sid2, $sid3>)
+    , Secret('senc_share', ~s_enc1, $cid, $sid1)
+    , Secret('senc_share', ~s_enc2, $cid, $sid2)
+    , Secret('senc_share', ~s_enc3, $cid, $sid3)
+    , Secret('kenc', kenc, $cid, <$sid1, $sid2, $sid3>)
+    , Secret('secret', ~secret, $cid, <$sid1, $sid2, $sid3>) ]->
     [ Out(encrypted_secret) // Q: should this be annotated with $cid? IMO not needed as long as we don't strive for success guarantees
     , SCClientOut($cid, $sid1, <$cid, ~koprf1, ~s_enc1, kvfy1>)
     , SCClientOut($cid, $sid2, <$cid, ~koprf2, ~s_enc2, kvfy2>)
@@ -284,7 +288,7 @@ restriction servers_offline:
 // - SCServerOut comes from various protocol rules
 
 // SourcesPoint is like an invariant that says: The point is either h(pw) or the adversary knows it.
-lemma types[sources,heuristic={sources}]: // autoprove
+lemma types[sources,heuristic={sources},reuse]: // autoprove
     "(All msg #i.
       SourcesAdversaryRecv(msg)@#i
       ==>
@@ -306,7 +310,7 @@ lemma types[sources,heuristic={sources}]: // autoprove
     )
     "
 
-lemma executability:
+lemma executability[hide_lemma=types]:
     exists-trace "
       // adversary doesn't do anything
       not (Ex #i. AdversaryAction()@#i)
@@ -328,46 +332,81 @@ lemma executability:
       )
     "
 
-// Pre Quantum Lemmas
-lemma secret_pw_pre_quantum[reuse]:
-    "All pw cid sid1 sid2 sid3 #i. Secret('pw', pw, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. KU(pw)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
+// pw secrecy
+lemma secret_pw_pre_quantum[reuse,hide_lemma=types]:
+    "All pw cid sid1 sid2 sid3 #i. Secret('pw', pw, cid, <sid1, sid2, sid3>)@#i
+      ==> (not Ex #j. KU(pw)@#j)
+      | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)
+      | (Ex #j #k. KU(pw)@#j & PQAdversaryAction()@#k & #k < #j)"
 
-lemma secret_koprf_pre_quantum[hide_lemma=secret_pw_pre_quantum]: // autoprove
-    "All koprf cid sid1 sid2 sid3 #i. Secret('koprf', koprf, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. KU(koprf)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
+lemma secret_pw_post_quantum[hide_lemma=types,hide_lemma=secret_pw_pre_quantum]:
+    "All pw cid sid1 sid2 sid3 #i. Secret('pw', pw, cid, <sid1, sid2, sid3>)@#i
+      ==> (not Ex #j. KU(pw)@#j)
+      | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
-lemma secret_kauth_pre_quantum[reuse]: // autoprove
-    "All kauth cid sid1 sid2 sid3 #i. Secret('kauth', kauth, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. KU(kauth)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
+// koprf secrecy
+lemma secret_koprf_pre_quantum[hide_lemma=types,hide_lemma=secret_pw_pre_quantum]:
+    "All koprf cid sid1 sid2 sid3 #i. Secret('koprf', koprf, cid, <sid1, sid2, sid3>)@#i
+      ==> (not Ex #j. KU(koprf)@#j)
+      | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)
+      | (Ex #j #k. KU(koprf)@#j & PQAdversaryAction()@#k & #k < #j)"
 
-lemma secret_kenc_pre_quantum[reuse,hide_lemma=secret_pw_pre_quantum]: // autoprove
-    "All kenc cid sid1 sid2 sid3 #i. Secret('kenc', kenc, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. KU(kenc)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
+lemma secret_koprf_post_quantum[hide_lemma=types,hide_lemma=secret_pw_pre_quantum]:
+    "All koprf cid sid1 sid2 sid3 #i. Secret('koprf', koprf, cid, <sid1, sid2, sid3>)@#i
+      ==> (not Ex #j. KU(koprf)@#j)
+      | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
-lemma secret_secret_pre_quantum[hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum]: // autoprove
-    "All secret cid sid1 sid2 sid3 #i. Secret('secret', secret, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. KU(secret)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l) | (Ex #j. PQAdversaryAction()@#j)"
+// kauth secrecy
+lemma secret_kauth_pre_quantum[reuse,hide_lemma=types]:
+    "All kauth cid sid1 sid2 sid3 #i. Secret('kauth', kauth, cid, <sid1, sid2, sid3>)@#i
+      ==> (not Ex #j. KU(kauth)@#j)
+      | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)
+      | (Ex #j #k. KU(kauth)@#j & PQAdversaryAction()@#k & #k < #j)"
 
-// Post Quantum Lemmas
-lemma secret_pw_post_quantum[hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum,hide_lemma=secret_kenc_pre_quantum]:
-    "All pw cid sid1 sid2 sid3 #i. Secret('pw', pw, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. KU(pw)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
+lemma secret_kauth_post_quantum[hide_lemma=types,hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum]:
+    "All kauth cid sid1 sid2 sid3 #i. Secret('kauth', kauth, cid, <sid1, sid2, sid3>)@#i
+      ==> (not Ex #j. KU(kauth)@#j)
+      | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
-lemma secret_koprf_post_quantum[hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum,hide_lemma=secret_kenc_pre_quantum]:
-    "All koprf cid sid1 sid2 sid3 #i. Secret('koprf', koprf, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. KU(koprf)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
+// senc secrecy
+lemma secret_senc_share_post_quantum[reuse,heuristic={senc_share_post_quantum},hide_lemma=types,hide_lemma=secret_pw_pre_quantum]:
+    "All s_enc_share cid sid #i. Secret('senc_share', s_enc_share, cid, sid)@#i
+      ==> (not Ex #j. KU(s_enc_share)@#j)
+      | (Ex #j. !Compromised(sid)@#j)"
 
-lemma secret_kauth_post_quantum[hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum,hide_lemma=secret_kenc_pre_quantum]:
-    "All kauth cid sid1 sid2 sid3 #i. Secret('kauth', kauth, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. KU(kauth)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
+lemma secret_senc_post_quantum[reuse,heuristic={senc_post_quantum},hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum]:
+    "All s_enc cid sid1 sid2 sid3 #i. Secret('senc', s_enc, cid, <sid1, sid2, sid3>)@#i
+      ==> (not Ex #j. KU(s_enc)@#j)
+      | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
-lemma secret_kenc_post_quantum[hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum,hide_lemma=secret_kenc_pre_quantum]:
-    "All kenc cid sid1 sid2 sid3 #i. Secret('kenc', kenc, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. KU(kenc)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
+lemma secret_senc_pre_quantum[hide_lemma=types,hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum,hide_lemma=secret_senc_share_post_quantum]:
+    "All s_enc cid sid1 sid2 sid3 #i. Secret('senc', s_enc, cid, <sid1, sid2, sid3>)@#i
+      ==> (not Ex #j. KU(s_enc)@#j)
+      | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)
+      | (Ex #j #k. KU(s_enc)@#j & PQAdversaryAction()@#k & #k < #j)"
 
-lemma secret_secret_post_quantum[hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum,hide_lemma=secret_kenc_pre_quantum]:
-    "All secret cid sid1 sid2 sid3 #i. Secret('secret', secret, cid, sid1, sid2, sid3)@#i
-      ==> (not Ex #j. KU(secret)@#j) | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
+// kenc secrecy
+lemma secret_kenc_post_quantum[reuse,hide_lemma=types,hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum,hide_lemma=secret_senc_share_post_quantum]:
+    "All kenc cid sid1 sid2 sid3 #i. Secret('kenc', kenc, cid, <sid1, sid2, sid3>)@#i
+      ==> (not Ex #j. KU(kenc)@#j)
+      | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
+
+lemma secret_kenc_pre_quantum[hide_lemma=types,hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum,hide_lemma=secret_senc_share_post_quantum,hide_lemma=secret_senc_post_quantum]:
+    "All kenc cid sid1 sid2 sid3 #i. Secret('kenc', kenc, cid, <sid1, sid2, sid3>)@#i
+      ==> (not Ex #j. KU(kenc)@#j)
+      | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)
+      | (Ex #j #k. KU(kenc)@#j & PQAdversaryAction()@#k & #k < #j)"
+
+// secret secrecy
+lemma secret_secret_post_quantum[reuse,hide_lemma=types,hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum,hide_lemma=secret_senc_share_post_quantum,hide_lemma=secret_senc_post_quantum]:
+    "All secret cid sid1 sid2 sid3 #i. Secret('secret', secret, cid, <sid1, sid2, sid3>)@#i
+      ==> (not Ex #j. KU(secret)@#j)
+      | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
+
+lemma secret_secret_pre_quantum[hide_lemma=types,hide_lemma=secret_pw_pre_quantum,hide_lemma=secret_kauth_pre_quantum,hide_lemma=secret_senc_share_post_quantum,hide_lemma=secret_senc_post_quantum,hide_lemma=secret_kenc_post_quantum]:
+    "All secret cid sid1 sid2 sid3 #i. Secret('secret', secret, cid, <sid1, sid2, sid3>)@#i
+      ==> (not Ex #j. KU(secret)@#j)
+      | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)
+      | (Ex #j #k. KU(secret)@#j & PQAdversaryAction()@#k & #k < #j)"
 
 end

@@ -6,13 +6,55 @@ prio:
     isFactName "SCServerIn" & regex ", msg, "
 
 // Second part: Point
-// Prioritise induction hypothesis specifying how point x looks like
-prio:
+prio: // Prioritise induction hypothesis specifying how point x looks like
     regex "SourceP\( x"
-// Prioritise finding out more about variable t
-prio:
+prio: // Prioritise finding out more about variable t
     isFactName "SCServerIn" & regex ", t, "
 
 // Third part: Factors
 prio:
     isFactName "SCServerIn" & regex ", a, "
+
+
+
+// Senc Share (Post Quantum)
+tactic: senc_share_post_quantum
+
+prio: // Find out how the adversary knows the s_enc share
+    regex "!KU\( ~s_enc"
+prio: // Prioritise finding out how x looks like
+    isFactName "SCServerIn" & regex ", pk\(x\)"
+prio: // Investigate how the the adversary faked the signature
+    regex "SCServerIn\( 'adv'"
+prio: // Find out how the adversary knew the signature
+    regex "!KU\( revealSign" | regex "!KU\( KDF"
+
+
+// Senc (Post Quantum)
+tactic: senc_post_quantum
+
+prio: // Proof Start
+    regex "splitEqs\(0\)"
+
+// First Part: !KU
+prio: // Find out how the adversary knows XORs of s_enc shares
+    regex "!KU\( \(~s_enc"
+
+// Second Part: !KD
+prio: // Find out how the adversary knows XORs of s_enc shares
+    regex "!KD\( \(~s_enc"
+
+prio: // various cases
+    regex "~~>"
+prio: // continue solving case adversary_recv and solve_dlog
+    isFactName "SCServerIn" & regex ", t, "
+prio: // case adversary_recv
+    regex "SCServerKnows\( 'adv', "
+prio: // case bruteforce
+    regex "!HumanGenerated"
+prio: // case eavesdrop_server
+    regex "SCClientKnows"
+prio: // case extract
+    regex "SourceP"
+prio: // case solve_dlog
+    regex "Factor"
