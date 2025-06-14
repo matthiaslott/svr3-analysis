@@ -1,5 +1,5 @@
 // Sources Lemma
-tactic: sources
+tactic: sources_lemma
 
 // First part: Secure Channel
 prio:
@@ -17,8 +17,8 @@ prio:
 
 
 
-// Senc Share (Post Quantum)
-tactic: senc_share_post_quantum
+// Senc Share
+tactic: senc_share_secrecy
 
 prio: // Find out how the adversary knows the s_enc share
     regex "!KU\( ~s_enc"
@@ -27,11 +27,11 @@ prio: // Prioritise finding out how x looks like
 prio: // Investigate how the the adversary faked the signature
     regex "SCServerIn\( 'adv'"
 prio: // Find out how the adversary knew the signature
-    regex "!KU\( revealSign" | regex "!KU\( KDF"
+    regex "!KU\( revealSign" | regex "!KU\( KDF" | regex "!KU\( h\(<~pw"
 
 
-// Senc (Post Quantum)
-tactic: senc_post_quantum
+// Senc
+tactic: senc_secrecy
 
 prio: // Proof Start
     regex "splitEqs\(0\)"
@@ -49,11 +49,11 @@ prio: // various cases
 prio: // continue solving case adversary_recv and solve_dlog
     isFactName "SCServerIn" & regex ", t, "
 prio: // case adversary_recv
-    regex "SCServerKnows\( 'adv', "
+    isFactName "SCClientIn" & regex ", 'adv', "
 prio: // case bruteforce
     regex "!HumanGenerated"
 prio: // case eavesdrop_server
-    regex "SCClientKnows"
+    regex "SCClientToServer"
 prio: // case extract
     regex "SourceP"
 prio: // case solve_dlog

@@ -1,35 +1,21 @@
 // Secure Channel:
 // - It is not modelled symmetrically. The servers can be authenticated because they run inside a TEE that can be validated.
 //   Clients cannot be authenticated. They are nevertheless denoted with a public value.
-//   To avoid "upgrading" this into an authenticated channel, the servers should never use that variable except for sending a response back.
+//   To avoid "upgrading" this into an authenticated channel, the servers should never pattern match the "$client" variable in another part of a rule
+//   and only use it to send back a response.
 // - The adversary can act on behalf of a compromised server.
-// - The adversary can act on behalf of a user (e.g. inside attacker that has access to authentication server)
-// TODO: Consider whether the adversary may replay messages
+// - The adversary can act on behalf of a client (e.g. inside attacker that has access to authentication server)
+// - The adversary may not replay or reflect messages if the server isn't compromised.
+//   This is not an issue because protection against these attacks only requires adding tags/sequence numbers to messages.
+//   Once the server is compromised or the adversary is impersonating an honest client, replays/reflections are possible.
 
-// ClientOut -> !ClientKnows -> ServerIn
-// ClientIn <- !ServerKnows <- ServerOut
-
-// Client -> Server
+// SCClientOut -> !SCClientToServer -> SCServerIn
+// SCServerOut -> !SCServerToClient -> SCClientIn
 rule client_out[color=#ffffff]:
-    [ SCClientOut($client, $server, msg) ]
-  --[]->
-    [ !SCClientKnows($client, $server, msg) ]
+    [ SCClientOut($client, $server, msg) ]-->[ SCServerIn($client, $server, msg), !SCClientToServer($client, $server, msg) ]
 
-rule server_in[color=#ffffff]:
-    [ !SCClientKnows($client, $server, msg) ]
-  --[]->
-    [ SCServerIn($client, $server, msg) ]
-
-// Server -> Client
 rule server_out[color=#ffffff]:
-    [ SCServerOut($client, $server, msg) ]
-  --[]->
-    [ !SCServerKnows($client, $server, msg) ]
-
-rule client_in[color=#ffffff]:
-    [ !SCServerKnows($client, $server, msg) ]
-  --[]->
-    [ SCClientIn($client, $server, msg) ]
+    [ SCServerOut($server, $client, msg) ]-->[ SCClientIn($server, $client, msg), !SCServerToClient($server, $client, msg) ]
 
 
 // Adversary Compromise
@@ -38,7 +24,7 @@ rule client_in[color=#ffffff]:
 // Because a server starts out with no state, everything it might ever want to send can be derived from the messages it receives.
 // It is thus not necessary to eavesdrop on outgoing messages
 rule eavesdrop_server[color=#e0afb5]:
-    [ !SCClientKnows($client, $server, msg), !Compromised($server) ]
+    [ !SCClientToServer($client, $server, msg), !Compromised($server) ]
   --[ AdversaryAction() ]->
     [ Out(msg) ]
 
@@ -46,7 +32,7 @@ rule eavesdrop_server[color=#e0afb5]:
 rule impersonate_server[color=#e0afb5]:
     [ In(msg), !Compromised($server) ]
   --[ AdversaryAction() ]->
-    [ SCServerOut($client, $server, msg) ]
+    [ SCServerOut($server, $client, msg) ]
 
 
 // Adversary Interaction
@@ -59,7 +45,7 @@ rule adversary_send[color=#e0afb5]:
 
 // Adversary receives a message
 rule adversary_recv[color=#e0afb5]:
-    [ !SCServerKnows('adv', $server, msg) ]
+    [ SCClientIn($server, 'adv', msg) ]
   --[ AdversaryAction()
     , SourcesAdversaryRecv(msg) ]->
     [ Out(msg) ]

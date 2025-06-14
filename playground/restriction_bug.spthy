@@ -1,0 +1,9 @@
+theory RestrictTest
+begin
+rule first_A:
+    []--[ A() ]->[]
+rule then_B:
+    []--[ B() ]->[]
+restriction same_thing:
+    "All #NOW. B()@#NOW ==> Ex #i. A()@#i & #i < #NOW"
+end

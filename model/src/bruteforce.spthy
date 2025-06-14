@@ -1,0 +1,85 @@
+// Bruteforce Attacks:
+// - Allows the adversary to deduce cryptographically weak fresh values (human generated passwords).
+// - Bruteforce(~v, x) allows the adversary to extract ~v given x if the adversary *might* know x.
+// - Deconstruction rules need not be considered because the adversary can apply them on their own before attempting to bruteforce.
+
+// The adversary has access to the following terms which are sent by the participants over the channel.
+// They can be used as a "target" in a bruteforce attack:
+// - senc(secret, KDF(s_enc1 XOR s_enc2 XOR s_enc3, kauth))
+// - <$cid, koprfi, s_enci, pk(KDF(kauth, '<i>'))>
+// - mul(b, h(pw))
+// - mul(factors ++ koprf_share, h(pw))
+// - revealSign(h(mul(b, h(pw))), KDF(kauth, '<i>'))
+// - s_enc_share
+
+// To make the adversary's life easier, we introduce some simplifications:
+// - The adversary doesn't need to know the target itself, a BruteforceCandidate fact that is added to the protocol rule suffices.
+//   This is not a big deal, the adversary can quite easily obtain these termss with a single server compromise anyway.
+// - As a consequence, we can simplify the targets that the adversary has to brutefroce against. Justification:
+//   - secret, $cid, koprfi, s_enci, <i> do not contain the password and are pure "knowledge checks", we unburden the adversary by omitting this.
+//   - To reach target "senc(secret, KDF(...))", target KDF(...) must be reached. Decryption doesn't help here because it would require knowledge of KDF(...),
+//     which is an even stronger requirement.
+//   - Whenever h(pw) is the elliptic curve point in a multiplication target (mul(f, h(pw))), f must contain a factor b, only knowledge of that one factor is needed.
+//     Argued differently: The smartest way to bruteforce the password with a mul target is to do so before the server responded, 
+//     the additional koprf_share factor only makes the attack more complicated.
+//   - Because signing is revealing, the adversary can try to bruteforce either only the message h(mul(b, h(pw))) or the whole signature.
+//   - Instead of bruteforcing against target h(x) or pk(x), we might as well allow to target x directly.
+// These considerations lead to the reduced list of bruteforce targets:
+// - kauth = h(<pw, mul(koprf1 ++ koprf2 ++ koprf3, h(pw))>)
+// - mul(b, h(pw))
+
+
+// Adversary can bruteforce a human generated value if the "weakness" propagates all the way to a target that the adversary might know
+rule bruteforce: // !HumanGenerated(~v) is repeated here to remind Tamarin that only human generated values can be bruteforced.
+    [ !HumanGenerated(~v), !BruteforceCandidate(t), !Bruteforce(~v, t),  ]
+  --[ AdversaryAction()
+    , _restrict(~v << t)
+    , BruteforceAttack(~v, t) ]->
+    [ Out(~v) ]
+
+
+// Obvious restriction to make Tamarin's life easier
+restriction bruteforce_simplification:
+    "All v t #i. !Bruteforce(v, t)@#i ==> v = t | v << t"
+
+
+// Base Case: If ~v is known, extracting ~v is trivial
+rule bruteforce_hg: // considers only fresh values because human generated values must be fresh
+    [ !HumanGenerated(~v) ]--[ !Bruteforce(~v, ~v) ]->[ !Bruteforce(~v, ~v) ]
+
+// pair
+rule bruteforce_pair: // combine two bruteforce attacks: iterative over candidates (~v, ~w) and verify against <x, y> 
+    [ !Bruteforce(~v, x), !Bruteforce(~w, y) ]--[ !Bruteforce(~v, <x,y>), !Bruteforce(~w, <x,y>) ]->[ !Bruteforce(~v, <x, y>), !Bruteforce(~w, <x, y>) ]
+rule bruteforce_pair_left: // extend attack by using a known term
+    [ !Bruteforce(~v, x), In(y) ]--[ !Bruteforce(~v, <x,y>) ]->[ !Bruteforce(~v, <x, y>) ]
+rule bruteforce_pair_right: // extend attack by using a known term
+    [ !In(x), !Bruteforce(~v, y) ]--[ !Bruteforce(~v, <x,y>) ]->[ !Bruteforce(~v, <x, y>) ]
+// fst/snd need not be considered because the equational theory "rewrites them away"
+
+// XOR
+// XORs don't occur in the bruteforce candidates.
+
+// hashing
+rule bruteforce_hash:
+    [ !Bruteforce(~v, x) ]--[ !Bruteforce(~v, h(x)) ]->[ !Bruteforce(~v, h(x)) ]
+
+// symmetric-encryption
+// symmetric encryption doesn't occur in the bruteforce candidates.
+
+// revealing-signing
+// signatures and public keys dno't occur in the bruteforce candidates.
+
+// multiset
+// Human generated values are not part of a multiset.
+
+// mul
+// The bruteforce candidates only contain human generated subterms in the right argument.
+rule bruteforce_mul:
+    [ In(f), !Bruteforce(~v, x) ]--[ !Bruteforce(~v, mul(f, x)) ]->[ !Bruteforce(~v, mul(f, x)) ]
+// Hypthetical: If the bruteforce candidates had multiple factors, we would have to think about how we deal with rules such as "mul(a, mul(f, x)) = mul(f ++ a, x)".
+// We might be tempted to add a rule [ In(a), !Bruteforce(~v, mul(f, x))]->[ !Bruteforce(~v, mul(f ++ a, x)) ]. Luckily, this is not needed because the password
+// must always be a subterm of the elliptic curve point and EVERY bruteforce attack must have knowledge of all factors f ++ a. 
+// Therefore, the above rule would also suffice in such an extended setting.
+
+// kdf
+// KDFs don't occur in the bruteforce candidates.
