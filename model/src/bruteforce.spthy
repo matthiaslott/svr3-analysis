@@ -48,7 +48,7 @@ rule bruteforce_hg: // considers only fresh values because human generated value
     [ !HumanGenerated(~v) ]--[ !Bruteforce(~v, ~v) ]->[ !Bruteforce(~v, ~v) ]
 
 // pair
-rule bruteforce_pair: // combine two bruteforce attacks: iterative over candidates (~v, ~w) and verify against <x, y> 
+rule bruteforce_pair: // combine two bruteforce attacks: iterate over candidates (~v, ~w) and verify against <x, y> 
     [ !Bruteforce(~v, x), !Bruteforce(~w, y) ]--[ !Bruteforce(~v, <x,y>), !Bruteforce(~w, <x,y>) ]->[ !Bruteforce(~v, <x, y>), !Bruteforce(~w, <x, y>) ]
 rule bruteforce_pair_left: // extend attack by using a known term
     [ !Bruteforce(~v, x), In(y) ]--[ !Bruteforce(~v, <x,y>) ]->[ !Bruteforce(~v, <x, y>) ]

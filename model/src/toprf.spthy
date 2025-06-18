@@ -15,13 +15,13 @@ rule combine[no_derivcheck, color=#d66f7c]: // [a]x, [b]x -> [a*b]x
     [ Out(mul(a ++ b, x)) ]
 
 rule add[no_derivcheck, color=#d66f7c]: // a, [b]x -> [a*b]x
-    [ In(a), In(mul(b, x)) ]
+    [ !Factor(a), In(a), In(mul(b, x)) ]
   --[ AdversaryAction()
     , SourcesPoint(x) ]->
     [ Out(mul(a ++ b, x)) ]
 
 rule remove[no_derivcheck, color=#d66f7c]: // a, [a*b]x -> [b]x
-    [ In(a), In(mul(a ++ b, x)) ]
+    [ !Factor(a), In(a), In(mul(a ++ b, x)) ]
   --[ AdversaryAction()
     , SourcesPoint(x) ]->
     [ Out(mul(b, x)) ]
