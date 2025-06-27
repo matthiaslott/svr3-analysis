@@ -6,19 +6,34 @@ prio:
     isFactName "SCServerIn" & regex ", msg, "
 
 // Second part: Point
-prio: // Prioritise induction hypothesis specifying how point x looks like
+prio: // Prioritise IH specifying how point x looks like
     regex "SourceP\( x"
 prio: // Prioritise finding out more about variable t
     isFactName "SCServerIn" & regex ", t, "
 
 
+// Mul Invariant
+tactic: mul_invariant
+
+prio: // apply IH to make progress
+    regex "HumanGenerated\( ~pw \)"
+prio:
+    regex "BlindingFactor" & not regex "∃"
+prio: // leads to contradiction because adversary doesn't know the factors
+    regex "!KU\( ~b \)"
+prio:
+    regex "!KU\( ~a \)" | regex "!KU\( ~koprf_share \)"
+
+    
+
+
 // Pre Quantum Password Secrecy (ONLY AUTOMATES PART OF THE PROOF)
 tactic: pw_pre_quantum_secrecy
-prio:
-    regex "b ⊏ \(koprf\d" | regex "b ⊏ \(~koprf\d"
 
-deprio:
-    regex "!KU\( h\(~pw\) \)"
+prio: 
+    isFactName "BlindingFactor"
+prio: // apply mul_invariant lemma
+    regex "HumanGenerated"
 
 // Senc Share
 tactic: senc_share_secrecy

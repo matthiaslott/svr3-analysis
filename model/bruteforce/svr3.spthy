@@ -71,6 +71,7 @@ rule client_initialise[color=#77b58d]:
     [ Fr(~pw), Fr(~secret) ]
   --[
       _restrict(NEQ($cid, 'adv')) // The adversary may contact the servers, but can't operate as its own client. Without this restriction, it would be as if the adversary could compromise 1 client.
+    , !HumanGenerated(~pw)
     ]->
     [ Client_0($cid, ~pw, ~secret), !HumanGenerated(~pw) ]
 
@@ -115,7 +116,7 @@ rule client_register[color=#77b58d]:
     , SCClientOut($cid, $sid2, <$cid, ~koprf2, ~s_enc2, kvfy2>)
     , SCClientOut($cid, $sid3, <$cid, ~koprf3, ~s_enc3, kvfy3>)
     , !Factor(~koprf1), !Factor(~koprf2), !Factor(~koprf3)
-    //, !BruteforceCandidate(kfv1), !BruteforceCandidate(kfv2), !BruteforceCandidate(kfv3) // the other elements of the tuples definitely do not contain the password
+    //, !BruteforceCandidate(kvfy1), !BruteforceCandidate(kvfy2), !BruteforceCandidate(kvfy3) // the other elements of the tuples definitely do not contain the password
     , !BruteforceCandidate(kauth)
     , !Client_1($cid, ~pw, $sid1, $sid2, $sid3) // forget the secret
     ]
@@ -137,7 +138,7 @@ rule client_reconstruct_phase1[color=#77b58d]:
     , Fr(~b) ]
   --[ ClientReconstructPhase1($cid, ~pw)
     , BlindingFactor(~b)
-    , !MulTerm(mul(~b, h(~pw))) ]->
+    , !KMul(mul(~b, h(~pw))) ]->
     [ SCClientOut($cid, $sid1, <$cid, mul(~b, h(~pw))>)
     , SCClientOut($cid, $sid2, <$cid, mul(~b, h(~pw))>)
     , SCClientOut($cid, $sid3, <$cid, mul(~b, h(~pw))>)
@@ -157,8 +158,10 @@ rule server_reconstruct_phase1[no_derivcheck, color=#7793b5]:
   --[ ServerAction()
     , ServerReconstructPhase1($sid)
     , SourceC(mul(factors ++ ~koprf_share, hpw))
-    , SourcesPoint(hpw) ]->
+    , SourcesPoint(hpw)
+    , !KMul(mul(factors ++ ~koprf_share, hpw)) ]->
     [ SCServerOut($sid, $client, mul(factors ++ ~koprf_share, hpw))
+    //, !BruteforceCandidate(mul(factors ++ ~koprf_share, hpw))
     , Server_2($sid, $cid, s_enc_share, kvfy, bhpw)
     , !Factor(~koprf_share) ]
 
@@ -187,6 +190,9 @@ rule client_reconstruct_phase2[no_derivcheck, color=#77b58d]:
     [ SCClientOut($cid, $sid1, sig1)
     , SCClientOut($cid, $sid2, sig2)
     , SCClientOut($cid, $sid3, sig3)
+    , !BruteforceCandidate(c)
+    //, !BruteforceCandidate(kauth)
+    //, !BruteforceCandidate(sig1), !BruteforceCandidate(sig2), !BruteforceCandidate(sig3)
     , Client_3($cid, ~pw, kauth, $sid1, $sid2, $sid3) ]
     
 rule server_reconstruct_phase2[color=#7793b5]:
@@ -285,50 +291,65 @@ lemma post_quantum_attack[hide_lemma=types]: // sanity check for adversary capab
     "
 
 // MAIN SECRECY GOAL
+/*lemma mul_terms_old[reuse,hide_lemma=types]: // The only way the adversary can get rid of the blinding factor of the client is with a quantum computer
+    "All f pw #i #j. !KMul(mul(f, h(pw)))@#i & !HumanGenerated(pw)@#j // If multiplication with a password hash on the right side, then
+      ==> (Ex #k. BlindingFactor(f)@#k) // f contains a secret factor
+      | (Ex a b #k. BlindingFactor(b)@#k & f = a ++ b) // f contains a secret factor
+      | (Ex #k. PQAdversaryAction()@#k & #k < #i)" // adversary used a QC to possibly find the secret factor
+      //| (Ex #k #l. !KU(f)@#k & !KU(h(pw))@l)" // don't want to deal with adversary construction here
+      //| (Ex a b #k. !KMul(mul(b, x))@#k & f = a ++ b)" // reduction to fewer factors
+      //| (Ex #k #l. !KU(f)@#k & !KU(x)@#l)" // don't want to deal with adversary construction here*/
+
+/*lemma mul_terms[reuse,hide_lemma=types]: // The only way the adversary can get rid of the blinding factor of the client is with a quantum computer
+    "All f x #i. !KMul(mul(f, x))@#i & (not Ex #j. !KU(x)@#j & #j < #i) // If multiplication with an unknown value on the right side, then
+      ==> (Ex #k. BlindingFactor(f)@#k) // f contains a secret factor
+      | (Ex a b #k. BlindingFactor(b)@#k & f = a ++ b) // f contains a secret factor
+      | (Ex #k. PQAdversaryAction()@#k & #k < #i)" // adversary used a QC to possibly find the secret factor*/
+
+lemma mul_invariant[reuse,use_induction,heuristic={mul_invariant},hide_lemma=types]: // The only way the adversary can get rid of the blinding factor of the client is with a quantum computer
+    "All f pw #i. !KMul(mul(f, h(pw)))@#i & (Ex #j. !HumanGenerated(pw)@#j) // If multiplication with a password hash on the right side, then
+      ==> (Ex #k. BlindingFactor(f)@#k) // f contains a secret factor
+      | (Ex a b #k. BlindingFactor(b)@#k & f = a ++ b) // f contains a secret factor
+      | (Ex #k. PQAdversaryAction()@#k & #k < #i) // adversary used a QC to possibly find the secret factor
+      | (Ex #k. !KU(pw)@#k & #k < #i)" // don't want to deal with the case where adversary knows the password already
 
 
-lemma mul_terms[reuse,hide_lemma=types]: // The only way the adversary can get rid of the blinding factor of the client is with a quantum computer
-    "All f x #i #j.
-      !KU(mul(f, x))@#i & SourceP(x)@#j
-      ==> (Ex b #k. (b << f | b = f) & BlindingFactor(b)@#k)
-      | (Ex #k. PQAdversaryAction()@#k & #k < #i)"
-
-lemma pw_pre_quantum_secrecy[reuse,heuristic={pw_pre_quantum_secrecy},hide_lemma=types]:
+lemma pw_pre_quantum_secrecy[reuse,heuristic={pw_pre_quantum_secrecy}]:
     "All pw cid sid1 sid2 sid3 #i. Secret('pw', pw, cid, <sid1, sid2, sid3>)@#i
       ==> (not Ex #j. KU(pw)@#j)
       | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)
       | (Ex #j #k. KU(pw)@#j & PQAdversaryAction()@#k & #k < #j)"
 
-lemma senc_share_secrecy[reuse,heuristic={senc_share_secrecy},hide_lemma=types]:
+lemma senc_share_secrecy[reuse,heuristic={senc_share_secrecy},hide_lemma=types,hide_lemma=mul_invariant]:
     "All s_enc_share cid sid #i. Secret('senc_share', s_enc_share, cid, sid)@#i
       ==> (not Ex #j. KU(s_enc_share)@#j)
       | (Ex #j. !Compromised(sid)@#j)"
 
-lemma senc_secrecy[reuse,heuristic={senc_secrecy},hide_lemma=pw_pre_quantum_secrecy]:
+lemma senc_secrecy[reuse,heuristic={senc_secrecy},hide_lemma=mul_invariant,hide_lemma=pw_pre_quantum_secrecy]:
     "All s_enc cid sid1 sid2 sid3 #i. Secret('senc', s_enc, cid, <sid1, sid2, sid3>)@#i
       ==> (not Ex #j. KU(s_enc)@#j)
       | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
-lemma secrecy[hide_lemma=types,hide_lemma=pw_pre_quantum_secrecy,hide_lemma=senc_share_secrecy]:
+lemma secrecy[hide_lemma=types,hide_lemma=mul_invariant,hide_lemma=pw_pre_quantum_secrecy,hide_lemma=senc_share_secrecy]:
     "All secret cid sid1 sid2 sid3 #i. Secret('secret', secret, cid, <sid1, sid2, sid3>)@#i
       ==> (not Ex #j. KU(secret)@#j)
       | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
 
 // LEMMAS FOR ADDITIONAL INVESTIGATION
-lemma koprf_pre_quantum_secrecy[hide_lemma=types,hide_lemma=pw_pre_quantum_secrecy,hide_lemma=senc_share_secrecy,hide_lemma=senc_secrecy]:
+lemma koprf_pre_quantum_secrecy[hide_lemma=types,hide_lemma=mul_invariant,hide_lemma=pw_pre_quantum_secrecy,hide_lemma=senc_share_secrecy,hide_lemma=senc_secrecy]:
     "All koprf cid sid1 sid2 sid3 #i. Secret('koprf', koprf, cid, <sid1, sid2, sid3>)@#i
       ==> (not Ex #j. KU(koprf)@#j)
       | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)
       | (Ex #j #k. KU(koprf)@#j & PQAdversaryAction()@#k & #k < #j)"
 
-lemma kauth_pre_quantum_secrecy[hide_lemma=types,hide_lemma=senc_share_secrecy,hide_lemma=senc_secrecy]:
+lemma kauth_pre_quantum_secrecy[hide_lemma=types,hide_lemma=mul_invariant,hide_lemma=senc_share_secrecy,hide_lemma=senc_secrecy]:
     "All kauth cid sid1 sid2 sid3 #i. Secret('kauth', kauth, cid, <sid1, sid2, sid3>)@#i
       ==> (not Ex #j. KU(kauth)@#j)
       | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)
       | (Ex #j #k. KU(kauth)@#j & PQAdversaryAction()@#k & #k < #j)"
 
-lemma kenc_secrecy[hide_lemma=types,hide_lemma=pw_pre_quantum_secrecy,hide_lemma=senc_share_secrecy]:
+lemma kenc_secrecy[hide_lemma=types,hide_lemma=mul_invariant,hide_lemma=pw_pre_quantum_secrecy,hide_lemma=senc_share_secrecy]:
     "All kenc cid sid1 sid2 sid3 #i. Secret('kenc', kenc, cid, <sid1, sid2, sid3>)@#i
       ==> (not Ex #j. KU(kenc)@#j)
       | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
