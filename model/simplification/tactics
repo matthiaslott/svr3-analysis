@@ -4,13 +4,14 @@ tactic: sources_lemma
 // First part: Secure Channel
 prio:
     isFactName "SCServerIn" & regex ", msg, "
-
 // Second part: Point
 prio: // Prioritise induction hypothesis specifying how point x looks like
     regex "SourceP\( x"
 prio: // Prioritise finding out more about variable t
     isFactName "SCServerIn" & regex ", t, "
-
+// Third part: Factors
+prio:
+    isFactName "SCServerIn" & regex ", f, "
 
 // Senc Share
 tactic: senc_share_secrecy
@@ -30,15 +31,12 @@ tactic: senc_secrecy
 
 prio: // Proof Start
     regex "splitEqs\(0\)"
-
 // First Part: !KU
 prio: // Find out how the adversary knows XORs of s_enc shares
     regex "!KU\( \(~s_enc"
-
 // Second Part: !KD
 prio: // Find out how the adversary knows XORs of s_enc shares
     regex "!KD\( \(~s_enc"
-
 prio: // various cases
     regex "~~>"
 prio: // continue solving case adversary_recv and solve_dlog

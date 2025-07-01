@@ -13,7 +13,6 @@ theory SVR3
 // - Access to client identifiers due to compromise of authentication server
 // - Interact with the servers on its own.
 // - Access to Quantum Computer that solves DLOG.
-// - [NOT YET] Bruteforce Attacks on password.
 
 begin
 
@@ -53,7 +52,8 @@ rule compromise_server[color=#d66f7c]:
 rule solve_dlog[no_derivcheck, color=#d66f7c]: // [f]x -> f
     [ !Factor(f) ]
   --[ AdversaryAction()
-    , PQAdversaryAction() ]->
+    , PQAdversaryAction()
+    , SourcesFactor(f) ]->
     [ Out(f) ]
 
 rule bruteforce:
@@ -101,6 +101,7 @@ rule client_register[color=#77b58d]:
     , ClientRegister($cid, ~pw, ~secret)
     , SourceC(~s_enc1), SourceC(~s_enc2), SourceC(~s_enc3)
     , SourceP(h(~pw))
+    , SourceF(~koprf1), SourceF(~koprf2), SourceF(~koprf3)
     , Secret('pw', ~pw, $cid, <$sid1, $sid2, $sid3>)
     , Secret('koprf', koprf, $cid, <$sid1, $sid2, $sid3>)
     , Secret('kauth', kauth, $cid, <$sid1, $sid2, $sid3>)
@@ -110,7 +111,7 @@ rule client_register[color=#77b58d]:
     , Secret('senc_share', ~s_enc3, $cid, $sid3)
     , Secret('kenc', kenc, $cid, <$sid1, $sid2, $sid3>)
     , Secret('secret', ~secret, $cid, <$sid1, $sid2, $sid3>) ]->
-    [ Out(encrypted_secret) // Q: should this be annotated with $cid? IMO not needed as long as we don't strive for success guarantees
+    [ Out(encrypted_secret) // Not annotated with $cid becase we do not strive for success guarantees
     , SCClientOut($cid, $sid1, <$cid, ~koprf1, ~s_enc1, kvfy1>)
     , SCClientOut($cid, $sid2, <$cid, ~koprf2, ~s_enc2, kvfy2>)
     , SCClientOut($cid, $sid3, <$cid, ~koprf3, ~s_enc3, kvfy3>)
@@ -121,18 +122,18 @@ rule client_register[color=#77b58d]:
 rule server_register[color=#7793b5]:
     [ !Server($sid)
       // Note: $client and $cid don't necessarily match because the client isn't authenticated.
-      // Note 2: ~koprf_share is required to be fresh as a model simplification. This is not an issue, the adversary is still able to "corrupt" this value.
-    , SCServerIn($client, $sid, <$cid, ~koprf_share, s_enc_share, kvfy>)
+    , SCServerIn($client, $sid, <$cid, koprf_share, s_enc_share, kvfy>)
     ]
   --[ ServerAction() ]->
-    [ !Server_1($sid, $cid, ~koprf_share, s_enc_share, kvfy) ]
+    [ !Server_1($sid, $cid, koprf_share, s_enc_share, kvfy) ]
 
 
 // Client Reconstruction (Phase 1)
 rule client_reconstruct_phase1[color=#77b58d]:
     [ !Client_1($cid, ~pw, $sid1, $sid2, $sid3)
     , Fr(~b) ]
-  --[ ClientReconstructPhase1($cid, ~pw) ]->
+  --[ ClientReconstructPhase1($cid, ~pw)
+    , SourceF(~b) ]->
     [ SCClientOut($cid, $sid1, <$cid, mul(~b, h(~pw))>)
     , SCClientOut($cid, $sid2, <$cid, mul(~b, h(~pw))>)
     , SCClientOut($cid, $sid3, <$cid, mul(~b, h(~pw))>)
@@ -140,21 +141,21 @@ rule client_reconstruct_phase1[color=#77b58d]:
     , !Factor(~b) ]
 
 // PATTERN MATCHING FOR:
-// - scalar multiplication with ~koprf_share
+// - scalar multiplication with koprf_share
 rule server_reconstruct_phase1[no_derivcheck, color=#7793b5]:
     let
       bhpw = mul(factors, hpw)
     in
-    [ !Server_1($sid, $cid, ~koprf_share, s_enc_share, kvfy)
+    [ !Server_1($sid, $cid, koprf_share, s_enc_share, kvfy)
     , SCServerIn($client, $sid, <$cid, bhpw>) // Note: $client and $cid don't necessarily match because the client isn't authenticated.
     ]
   --[ ServerAction()
     , ServerReconstructPhase1($sid)
-    , SourceC(mul(factors ++ ~koprf_share, hpw))
+    , SourceC(mul(factors ++ koprf_share, hpw))
     , SourcesPoint(hpw) ]->
-    [ SCServerOut($sid, $client, mul(factors ++ ~koprf_share, hpw))
+    [ SCServerOut($sid, $client, mul(factors ++ koprf_share, hpw))
     , Server_2($sid, $cid, s_enc_share, kvfy, bhpw)
-    , !Factor(~koprf_share) ]
+    , !Factor(koprf_share) ]
 
 
 // PATTERN MATCHING TO:
@@ -235,6 +236,12 @@ lemma types[sources,heuristic={sources_lemma},reuse]: // autoprove
       ==>
       ( (Ex #j. SourceP(x)@#j & #j < #i)
       | (Ex #j. !KU(x)@#j & #j < #i)
+      )
+    ) & (All f #i.
+      SourcesFactor(f)@#i
+      ==>
+      ( (Ex #j. SourceF(f)@#j & #j < #i)
+      | (Ex #j. !KU(f)@#j & #j < #i)
       )
     )"
 
