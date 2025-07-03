@@ -25,7 +25,7 @@ predicates:
 functions:
   KDF/2
 
-// provides: SCClientOut, SCClientIn, SCServerOut, SCServerIn
+// provides: SCOut, SCIn
 // uses: !Server, !Compromised
 #include "src/securechannel.spthy"
 
@@ -38,7 +38,7 @@ functions:
 // World Building
 
 rule create_server:
-    []-->[ !Server($sid) ]
+    []--[ !Server($sid) ]->[ !Server($sid) ]
 
 
 // Adversary Capabilities
@@ -97,8 +97,9 @@ rule client_register[color=#77b58d]:
     , Fr(~koprf1), Fr(~koprf2), Fr(~koprf3)
     , Fr(~s_enc1), Fr(~s_enc2), Fr(~s_enc3)
     , !Server($sid1), !Server($sid2), !Server($sid3) ]
-  --[ _restrict(DISTINCT($sid1, $sid2, $sid3))
+  --[ _restrict(DISTINCT($sid1, $sid2, $sid3) & NEQ($sid1, 'adv') & NEQ($sid2, 'adv') & NEQ($sid3, 'adv'))
     , ClientRegister($cid, ~pw, ~secret)
+    , SourceC(<$cid, ~koprf1, ~s_enc1, kvfy1>), SourceC(<$cid, ~koprf2, ~s_enc2, kvfy2>), SourceC(<$cid, ~koprf3, ~s_enc3, kvfy3>)
     , SourceC(~s_enc1), SourceC(~s_enc2), SourceC(~s_enc3)
     , SourceP(h(~pw))
     , SourceF(~koprf1), SourceF(~koprf2), SourceF(~koprf3)
@@ -112,9 +113,9 @@ rule client_register[color=#77b58d]:
     , Secret('kenc', kenc, $cid, <$sid1, $sid2, $sid3>)
     , Secret('secret', ~secret, $cid, <$sid1, $sid2, $sid3>) ]->
     [ Out(encrypted_secret) // Not annotated with $cid becase we do not strive for success guarantees
-    , SCClientOut($cid, $sid1, <$cid, ~koprf1, ~s_enc1, kvfy1>)
-    , SCClientOut($cid, $sid2, <$cid, ~koprf2, ~s_enc2, kvfy2>)
-    , SCClientOut($cid, $sid3, <$cid, ~koprf3, ~s_enc3, kvfy3>)
+    , SCOut($cid, $sid1, <$cid, ~koprf1, ~s_enc1, kvfy1>)
+    , SCOut($cid, $sid2, <$cid, ~koprf2, ~s_enc2, kvfy2>)
+    , SCOut($cid, $sid3, <$cid, ~koprf3, ~s_enc3, kvfy3>)
     , !Client_1($cid, ~pw, $sid1, $sid2, $sid3) // forget the secret
     ]
 
@@ -122,7 +123,7 @@ rule client_register[color=#77b58d]:
 rule server_register[color=#7793b5]:
     [ !Server($sid)
       // Note: $client and $cid don't necessarily match because the client isn't authenticated.
-    , SCServerIn($client, $sid, <$cid, koprf_share, s_enc_share, kvfy>)
+    , SCIn($client, $sid, <$cid, koprf_share, s_enc_share, kvfy>)
     ]
   --[ ServerAction() ]->
     [ !Server_1($sid, $cid, koprf_share, s_enc_share, kvfy) ]
@@ -133,10 +134,11 @@ rule client_reconstruct_phase1[color=#77b58d]:
     [ !Client_1($cid, ~pw, $sid1, $sid2, $sid3)
     , Fr(~b) ]
   --[ ClientReconstructPhase1($cid, ~pw)
+    , SourceC(<$cid, mul(~b, h(~pw))>)
     , SourceF(~b) ]->
-    [ SCClientOut($cid, $sid1, <$cid, mul(~b, h(~pw))>)
-    , SCClientOut($cid, $sid2, <$cid, mul(~b, h(~pw))>)
-    , SCClientOut($cid, $sid3, <$cid, mul(~b, h(~pw))>)
+    [ SCOut($cid, $sid1, <$cid, mul(~b, h(~pw))>)
+    , SCOut($cid, $sid2, <$cid, mul(~b, h(~pw))>)
+    , SCOut($cid, $sid3, <$cid, mul(~b, h(~pw))>)
     , Client_2($cid, ~pw, $sid1, $sid2, $sid3, ~b)
     , !Factor(~b) ]
 
@@ -147,13 +149,13 @@ rule server_reconstruct_phase1[no_derivcheck, color=#7793b5]:
       bhpw = mul(factors, hpw)
     in
     [ !Server_1($sid, $cid, koprf_share, s_enc_share, kvfy)
-    , SCServerIn($client, $sid, <$cid, bhpw>) // Note: $client and $cid don't necessarily match because the client isn't authenticated.
+    , SCIn($client, $sid, <$cid, bhpw>) // Note: $client and $cid don't necessarily match because the client isn't authenticated.
     ]
   --[ ServerAction()
     , ServerReconstructPhase1($sid)
     , SourceC(mul(factors ++ koprf_share, hpw))
     , SourcesPoint(hpw) ]->
-    [ SCServerOut($sid, $client, mul(factors ++ koprf_share, hpw))
+    [ SCOut($sid, $client, mul(factors ++ koprf_share, hpw))
     , Server_2($sid, $cid, s_enc_share, kvfy, bhpw)
     , !Factor(koprf_share) ]
 
@@ -175,13 +177,14 @@ rule client_reconstruct_phase2[no_derivcheck, color=#77b58d]:
         sig3 = revealSign(c, ksign3)
     in 
     [ Client_2($cid, ~pw, $sid1, $sid2, $sid3, ~b)
-    , SCClientIn($sid1, $cid, mul(~b ++ koprf1, hpw))
-    , SCClientIn($sid2, $cid, mul(~b ++ koprf2, hpw))
-    , SCClientIn($sid3, $cid, mul(~b ++ koprf3, hpw)) ]
-  --[ ClientReconstructPhase2($cid, ~pw) ]->
-    [ SCClientOut($cid, $sid1, sig1)
-    , SCClientOut($cid, $sid2, sig2)
-    , SCClientOut($cid, $sid3, sig3)
+    , SCIn($sid1, $cid, mul(~b ++ koprf1, hpw))
+    , SCIn($sid2, $cid, mul(~b ++ koprf2, hpw))
+    , SCIn($sid3, $cid, mul(~b ++ koprf3, hpw)) ]
+  --[ ClientReconstructPhase2($cid, ~pw)
+    , SourceC(sig1), SourceC(sig2), SourceC(sig3) ]->
+    [ SCOut($cid, $sid1, sig1)
+    , SCOut($cid, $sid2, sig2)
+    , SCOut($cid, $sid3, sig3)
     , Client_3($cid, ~pw, kauth, $sid1, $sid2, $sid3) ]
     
 rule server_reconstruct_phase2[color=#7793b5]:
@@ -189,11 +192,11 @@ rule server_reconstruct_phase2[color=#7793b5]:
         c = h(bhpw) // Change if Noise.ExportedAuthenticator is modelled!
     in
     [ Server_2($sid, $cid, s_enc_share, kvfy, bhpw)
-    , SCServerIn($client, $sid, sig) // Note: $client and $cid don't necessarily match because the client isn't authenticated.
+    , SCIn($client, $sid, sig) // Note: $client and $cid don't necessarily match because the client isn't authenticated.
     ]
   --[ _restrict(revealVerify(sig, c, kvfy) = true)
     , ServerAction() ]->
-    [ SCServerOut($sid, $client, s_enc_share) ]
+    [ SCOut($sid, $client, s_enc_share) ]
 
 
 rule client_reconstruct_finish[color=#77b58d]:
@@ -203,9 +206,9 @@ rule client_reconstruct_finish[color=#77b58d]:
         secret = sdec(encrypted_secret, kenc)
     in
     [ Client_3($cid, ~pw, kauth, $sid1, $sid2, $sid3)
-    , SCClientIn($sid1, $cid, s_enc1)
-    , SCClientIn($sid2, $cid, s_enc2)
-    , SCClientIn($sid3, $cid, s_enc3)
+    , SCIn($sid1, $cid, s_enc1)
+    , SCIn($sid2, $cid, s_enc2)
+    , SCIn($sid3, $cid, s_enc3)
     , In(encrypted_secret) ]
   --[ ClientReconstructFinish($cid, ~pw, secret) ]->
     []
@@ -219,9 +222,9 @@ restriction servers_offline:
 
 // SourcesAdversaryRecv: Tamarin believes any msg can be derived using rule adversary_recv.
 // But:
-// - Out comes from SCClientIn
-// - SCClientIn comes from SCServerOut
-// - SCServerOut comes from various protocol rules
+// - Out comes from SCIn
+// - SCIn comes from SCOut
+// - SCOut comes from various protocol rules
 
 // SourcesPoint is an invariant that says: The point is either h(pw) or the adversary knows it.
 lemma types[sources,heuristic={sources_lemma},reuse]: // autoprove
@@ -285,30 +288,31 @@ lemma post_quantum_attack[hide_lemma=types]: // sanity check for adversary capab
     "
 
 // MAIN SECRECY GOAL
-lemma pw_pre_quantum_secrecy[reuse,hide_lemma=types]:
-    "All pw cid sid1 sid2 sid3 #i. Secret('pw', pw, cid, <sid1, sid2, sid3>)@#i
-      ==> (not Ex #j. KU(pw)@#j)
-      | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)
-      | (Ex #j #k. KU(pw)@#j & PQAdversaryAction()@#k & #k < #j)"
 
 lemma senc_share_secrecy[reuse,heuristic={senc_share_secrecy},hide_lemma=types]:
     "All s_enc_share cid sid #i. Secret('senc_share', s_enc_share, cid, sid)@#i
       ==> (not Ex #j. KU(s_enc_share)@#j)
       | (Ex #j. !Compromised(sid)@#j)"
 
-lemma senc_secrecy[reuse,heuristic={senc_secrecy},hide_lemma=pw_pre_quantum_secrecy]:
+lemma senc_secrecy[reuse,heuristic={senc_secrecy}]:
     "All s_enc cid sid1 sid2 sid3 #i. Secret('senc', s_enc, cid, <sid1, sid2, sid3>)@#i
       ==> (not Ex #j. KU(s_enc)@#j)
       | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
-lemma secrecy[hide_lemma=types,hide_lemma=pw_pre_quantum_secrecy,hide_lemma=senc_share_secrecy]:
+lemma secrecy[hide_lemma=types,hide_lemma=senc_share_secrecy]:
     "All secret cid sid1 sid2 sid3 #i. Secret('secret', secret, cid, <sid1, sid2, sid3>)@#i
       ==> (not Ex #j. KU(secret)@#j)
       | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
 
+// SECONDARY SECRECY GOAL
+lemma pw_pre_quantum_secrecy[hide_lemma=types,hide_lemma=senc_share_secrecy,hide_lemma=senc_secrecy]:
+    "All pw cid sid1 sid2 sid3 #i. Secret('pw', pw, cid, <sid1, sid2, sid3>)@#i
+      ==> (not Ex #j. KU(pw)@#j)
+      | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)
+      | (Ex #j #k. KU(pw)@#j & PQAdversaryAction()@#k & #k < #j)"
 
 // LEMMAS FOR ADDITIONAL INVESTIGATION
-lemma koprf_pre_quantum_secrecy[hide_lemma=types,hide_lemma=pw_pre_quantum_secrecy,hide_lemma=senc_share_secrecy,hide_lemma=senc_secrecy]:
+lemma koprf_pre_quantum_secrecy[hide_lemma=types,hide_lemma=senc_share_secrecy,hide_lemma=senc_secrecy]:
     "All koprf cid sid1 sid2 sid3 #i. Secret('koprf', koprf, cid, <sid1, sid2, sid3>)@#i
       ==> (not Ex #j. KU(koprf)@#j)
       | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)
@@ -320,7 +324,7 @@ lemma kauth_pre_quantum_secrecy[hide_lemma=types,hide_lemma=senc_share_secrecy,h
       | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)
       | (Ex #j #k. KU(kauth)@#j & PQAdversaryAction()@#k & #k < #j)"
 
-lemma kenc_secrecy[hide_lemma=types,hide_lemma=pw_pre_quantum_secrecy,hide_lemma=senc_share_secrecy]:
+lemma kenc_secrecy[hide_lemma=types,hide_lemma=senc_share_secrecy]:
     "All kenc cid sid1 sid2 sid3 #i. Secret('kenc', kenc, cid, <sid1, sid2, sid3>)@#i
       ==> (not Ex #j. KU(kenc)@#j)
       | (Ex #j #k #l. !Compromised(sid1)@#j & !Compromised(sid2)@#k & !Compromised(sid3)@#l)"
