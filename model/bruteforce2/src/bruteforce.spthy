@@ -1,0 +1,103 @@
+// Brute-force Attacks:
+// - Allows the adversary to deduce cryptographically weak fresh values (human generated passwords).
+// - Brute-force(~v, x) allows the adversary to extract ~v if the adversary *might* know x.
+// - Deconstruction rules need not be considered because the adversary can apply them on their own before attempting to brute-force.
+//   However, we must ensure that the adversary can also brute-force those new targets.
+
+
+// Simplifications:
+// - The "target" for the brute-force attack must be deduced from the messages that are sent over the channel.
+// - Only the messages that are sent by the client must be considered.
+//   - The server's response in the first reconstruction phase adds a factor, which makes a brute-force attack more difficult (the adversary must know yet another factor!)
+//   - The server's response in the second reconstruction phase was previously sent over the channel. The adversary might as well brute-force it there already.
+// - The adversary need not have knowledge of the brute-force target, it suffices that the message was sent over the channel.
+
+
+// Adversary can brute-force a human generated value if the "weakness" propagates all the way to a target that the adversary might know
+rule bruteforce: // !HumanGenerated(~v) is repeated here to remind Tamarin that only human generated values can be brute-forced.
+    [ !HumanGenerated(~v), !BruteforceCandidate(t), !Bruteforce(~v, t) ]
+  --[ AdversaryAction()
+    , _restrict(~v << t)
+    , BruteforceAttack(~v, t) ]->
+    [ Out(~v) ]
+
+
+// Base Case: If ~v is known, extracting ~v is trivial
+rule bruteforce_hg: // considers only fresh values because human generated values must be fresh
+    [ !HumanGenerated(~v) ]-->[ !Bruteforce(~v, ~v) ]
+
+// pair
+rule bruteforce_pair: // combine two brute-force attacks: iterate over candidates (~v, ~w) and verify against <x, y> 
+    [ !Bruteforce(~v, x), !Bruteforce(~w, y) ]-->[ !Bruteforce(~v, <x, y>), !Bruteforce(~w, <x, y>) ]
+rule bruteforce_pair_left: // extend attack by using a known term
+    [ !Bruteforce(~v, x), In(y) ]-->[ !Bruteforce(~v, <x, y>) ]
+rule bruteforce_pair_right: // extend attack by using a known term
+    [ !In(x), !Bruteforce(~v, y) ]-->[ !Bruteforce(~v, <x, y>) ]
+// fst/snd need not be considered because the equational theory "rewrites them away"
+
+// hashing
+rule bruteforce_hash:
+    [ !Bruteforce(~v, x) ]-->[ !Bruteforce(~v, h(x)) ]
+
+// symmetric-encryption
+rule bruteforce_senc:
+    [ !Bruteforce(~v, m), !Bruteforce(~w, k) ]-->[ !Bruteforce(~v, senc(m, k)), !Bruteforce(~w, senc(m, k)) ]
+rule bruteforce_senc_left:
+    [ !Bruteforce(~v, m), In(k) ]-->[ !Bruteforce(~v, senc(m, k)) ]
+rule bruteforce_senc_right:
+    [ In(m), !Bruteforce(~v, k) ]-->[ !Bruteforce(~v, senc(m, k)) ]
+// sdec need not be considered because it doesn't occur in the messages that are sent on the channel.
+
+// revealing-signing
+rule bruteforce_sign:
+    [ !Bruteforce(~u, m), !Bruteforce(~v, r), !Bruteforce(~w, k) ]-->[ !Bruteforce(~u, revealSign(m, r, k)), !Bruteforce(~v, revealSign(m, r, k)), !Bruteforce(~w, revealSign(m, r, k)) ]
+rule bruteforce_sign_left_mid:
+    [ !Bruteforce(~v, m), !Bruteforce(~w, r), In(k) ]-->[ !Bruteforce(~v, revealSign(m, r, k)), !Bruteforce(~w, revealSign(m, r, k)) ]
+rule bruteforce_sign_left_right:
+    [ !Bruteforce(~v, m), In(r), !Bruteforce(~w, k) ]-->[ !Bruteforce(~v, revealSign(m, r, k)), !Bruteforce(~w, revealSign(m, r, k)) ]
+rule bruteforce_sign_mid_right:
+    [ In(m), !Bruteforce(~v, r), !Bruteforce(~w, k) ]-->[ !Bruteforce(~v, revealSign(m, r, k)), !Bruteforce(~w, revealSign(m, r, k)) ]
+rule bruteforce_sign_left:
+    [ !Bruteforce(~v, m), In(r), In(k) ]-->[ !Bruteforce(~v, revealSign(m, r, k)) ]
+rule bruteforce_sign_mid:
+    [ In(m), !Bruteforce(~v, r), In(k) ]-->[ !Bruteforce(~v, revealSign(m, r, k)) ]
+rule bruteforce_sign_right:
+    [ In(m), In(r), !Bruteforce(~v, k) ]-->[ !Bruteforce(~v, revealSign(m, r, k)) ]
+rule bruteforce_pk:
+    [ !Bruteforce(~v, k) ]-->[ !Bruteforce(~v, pk(k)) ]  
+// revealVerify and getMessage need not be considered because they don't occur in messages that are sent on the channel.
+
+// multiset
+rule bruteforce_concat:
+    [ !Bruteforce(~v, x), !Bruteforce(~w, y) ]-->[ !Bruteforce(~v, x ++ y), !Bruteforce(~w, x ++ y) ]
+rule bruteforce_concat_left:
+    [ !Bruteforce(~v, x), In(y) ]-->[ !Bruteforce(~v, x ++ y) ]
+rule bruteforce_concat_right:
+    [ In(x), !Bruteforce(~v, y) ]-->[ !Bruteforce(~v, x ++ y) ]
+
+// mul
+// Due to how multiplication is modelled, the factors are never human generated.
+// Thus, !Bruteforce(~v, mul(f, x)) implies !Bruteforce(~v, x), the elliptic curve point must contain the password.
+// As a result, it suffices to have only one rule for modelling multiplication.
+rule bruteforce_mul:
+    [ In(f), !Bruteforce(~v, x) ]-->[ !Bruteforce(~v, mul(f, x)) ]
+
+// One might wonder why there are no brute-force rules to capture the behaviour of the combine/add/remove/extract rules from toprf.spthy.
+// As we did not use an equational theory, Tamarin does not handle this automatically for us. Some care is required:
+// - Deconstruction Rules: If the adversary knows Bruteforce([ab]P) and wishes to (w.l.o.g.) obtain Bruteforce([b]P) or even Bruteforce(P),
+//   if suffices to analyse how they constructed Bruteforce([ab]P). We have In(a ++ b) and Bruteforce(P).
+//   Because our model only ever leaks "single factors", In(a ++ b) implies In(a) and In(b), hence Bruteforce([b]P).
+// - Construction Rules: Both construction rules output terms of the form [ab]P. The only reason an adversary might want to brute-force [ab]P instead of [a]P or [b]P
+//   is if they knew ab but not a and b. As argued above, it is impossible to have In(a ++ b) while not being able to derive In(a) and In(b).
+
+// Nevertheless, this is something that should be made more formal in the future,
+// ideally by modelling multiplication with a built-in such that combine/add/remove/extract are no longer needed.
+
+
+// kdf
+rule bruteforce_kdf:
+    [ !Bruteforce(~v, x), !Bruteforce(~w, y) ]-->[ !Bruteforce(~v, KDF(x, y)), !Bruteforce(~w, KDF(x, y)) ]
+rule bruteforce_kdf_left:
+    [ !Bruteforce(~v, x), In(y) ]-->[ !Bruteforce(~v, KDF(x, y))]
+rule bruteforce_kdf_right:
+    [ In(x), !Bruteforce(~v, y) ]-->[ !Bruteforce(~v, KDF(x, y)) ]

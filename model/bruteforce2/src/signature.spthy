@@ -1,0 +1,12 @@
+// Non-deterministic signatures inspired by the revealing-signing built-in
+
+functions:
+    revealSign/3        // revealSign(m, r, sk)
+  , revealVerify/4      // revealVerify(sig, m, pk(r), pk(sk))
+  , getMessage/1
+  , pk/1
+  , true/0
+
+equations:
+    revealVerify(revealSign(m, r, sk), m, pk(r), pk(sk)) = true
+  , getMessage(revealSign(m, r, sk)) = m

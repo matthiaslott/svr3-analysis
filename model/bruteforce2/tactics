@@ -1,0 +1,81 @@
+// Sources Lemma
+tactic: sources_lemma
+
+// First part: Secure Channel
+prio:
+    isFactName "SCIn" & regex ", msg, "
+// Second part: Point
+prio:
+    regex "~~>"
+prio: // Prioritise induction hypothesis specifying how point x or t looks like
+    regex "SourceP\( [x|t]"
+prio: // Prioritise finding out more about variable t
+    isFactName "SCIn" & regex ", t, "
+prio: // Prioritise learning more about factor a
+    regex "!KU\( ~a" & not regex "last\(#"
+prio:
+    regex "!Factor\( ~a"
+
+
+// Mul Invariant
+tactic: mul_invariant
+
+prio: // Immediate Contradiction
+    regex "SCIn\(.*<\$cid.*<\$cid"
+prio:
+    regex "BlindingFactor" & not regex "∃"
+prio: // leads to contradiction because adversary doesn't know the factors
+    regex "!KU\( ~b \)"
+prio:
+    regex "!KU\( ~a \)" | regex "!KU\( ~koprf_share \)"
+prio: // apply IH to make progress
+    regex "HumanGenerated\( ~pw \)"
+
+
+// PW Pre Quantum Secrecy (Only Partially Autoproven)
+tactic: pw_pre_quantum_secrecy 
+
+prio: // Immediate Contradiction
+    regex "SCIn\(.*<\$cid.*<\$cid"
+
+prio: // s_enc and secret do not contain the password
+    regex "!Bruteforce\( ~(v|w|pw), \(?~(s_enc|secret)"
+
+prio: // Brute-forcing signatures requires bruteforcing or knowing the randomness
+    regex "!KU\( ~r \)" | regex "!Bruteforce\( ~(u|v|w|pw), pk\(~r\) \)" | regex "!Bruteforce\( ~(u|v|w|pw), ~r \)"
+prio:
+    regex "!Bruteforce\( ~pw,\s+revealSign\("
+
+prio:
+    regex "!KU\( ~koprf"
+
+
+// Senc Share
+tactic: senc_share_secrecy
+
+prio: // Immediate Contradiction
+    regex "SCIn\(.*<\$cid.*<\$cid"
+
+prio:
+    regex "!KU\( ~s_enc" | regex "pk\(x\)"
+prio:
+    regex "SCIn" & regex "revealSign"
+prio:
+    regex "!KU\( ~r \)"
+prio: // Find out how the adversary knew the signature
+    regex "!KU\( revealSign\(" | regex "!KU\( KDF\(h\(<~pw" | regex "!KU\( h\(<~pw"
+prio:
+    regex "!KU\( ~pw"
+
+deprio:
+    regex "Client_0" | regex "Server"
+
+
+// Koprf Secrecy
+tactic: koprf_pre_quantum_secrecy
+
+prio: // Immediate Contradiction
+    regex "SCIn\(.*<\$cid.*<\$cid"
+prio:
+    regex "!KU\( ~koprf"
+

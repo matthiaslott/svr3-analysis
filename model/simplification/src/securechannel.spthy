@@ -1,7 +1,7 @@
 // Secure Channel:
 // - It is not modelled symmetrically. The servers can be authenticated.
 //   Clients cannot be authenticated. They are nevertheless denoted with a public value.
-//   To avoid "upgrading" this into an authenticated channel, the servers should never pattern match the "$client" variable in another part of a rule
+//   To avoid "upgrading" this into an authenticated channel, the servers should never pattern match the "$sender" variable in another part of a rule
 //   and only use it to send back a response.
 // - The adversary can act on behalf of a compromised server.
 // - The adversary can act on behalf of a client (e.g. inside attacker that has access to authentication server)
