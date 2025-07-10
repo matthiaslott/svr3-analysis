@@ -3,58 +3,79 @@ tactic: sources_lemma
 
 // First part: Secure Channel
 prio:
-    isFactName "SCServerIn" & regex ", msg, "
-
+    isFactName "SCIn" & regex ", msg, "
 // Second part: Point
-prio: // Prioritise induction hypothesis specifying how point x looks like
-    regex "SourceP\( x"
-prio: // Prioritise finding out more about variable t
-    isFactName "SCServerIn" & regex ", t, "
-
-// Third part: Factors
 prio:
-    isFactName "SCServerIn" & regex ", a, "
+    regex "~~>"
+prio: // Prioritise induction hypothesis specifying how point x or t looks like
+    regex "SourceP\( [x|t]"
+prio: // Prioritise finding out more about variable t
+    isFactName "SCIn" & regex ", t, "
+prio: // Prioritise learning more about factor a
+    regex "!KU\( ~a" & not regex "last\(#"
+prio:
+    regex "!Factor\( ~a"
 
+
+// Mul Invariant
+tactic: mul_invariant
+
+prio: // Immediate Contradiction
+    regex "SCIn\(.*<\$cid.*<\$cid"
+prio:
+    regex "BlindingFactor" & not regex "∃"
+prio: // leads to contradiction because adversary doesn't know the factors
+    regex "!KU\( ~b \)"
+prio:
+    regex "!KU\( ~a \)" | regex "!KU\( ~koprf_share \)"
+prio: // apply IH to make progress
+    regex "HumanGenerated\( ~pw \)"
+
+
+// PW Pre Quantum Secrecy (Only Partially Autoproven)
+tactic: pw_pre_quantum_secrecy 
+
+prio: // Immediate Contradiction
+    regex "SCIn\(.*<\$cid.*<\$cid"
+
+prio: // s_enc and secret do not contain the password
+    regex "!Bruteforce\( ~(v|w|pw), \(?~(s_enc|secret)"
+
+prio: // Brute-forcing signatures requires bruteforcing or knowing the randomness
+    regex "!KU\( ~r \)" | regex "!Bruteforce\( ~(u|v|w|pw), pk\(~r\) \)" | regex "!Bruteforce\( ~(u|v|w|pw), ~r \)"
+prio:
+    regex "!Bruteforce\( ~pw,\s+revealSign\("
+
+prio:
+    regex "!KU\( ~koprf"
 
 
 // Senc Share
 tactic: senc_share_secrecy
 
-prio: // Find out how the adversary knows the s_enc share
-    regex "!KU\( ~s_enc"
-prio: // Prioritise finding out how x looks like
-    isFactName "SCServerIn" & regex ", pk\(x\)"
-prio: // Investigate how the the adversary faked the signature
-    regex "SCServerIn\( 'adv'"
+prio: // Immediate Contradiction
+    regex "SCIn\(.*<\$cid.*<\$cid"
+
+prio:
+    regex "!KU\( ~s_enc" | regex "pk\(x\)"
+prio:
+    regex "SCIn" & regex "revealSign"
+prio:
+    regex "!KU\( ~r \)"
 prio: // Find out how the adversary knew the signature
-    regex "!KU\( revealSign" | regex "!KU\( KDF" | regex "!KU\( h\(<~pw"
+    regex "!KU\( revealSign\(" | regex "!KU\( KDF\(h\(<~pw" | regex "!KU\( h\(<~pw"
+prio:
+    regex "!KU\( ~pw"
+
+deprio:
+    regex "Client_0" | regex "Server"
 
 
-// Senc
-tactic: senc_secrecy
+// Koprf Secrecy
+tactic: koprf_pre_quantum_secrecy
 
-prio: // Proof Start
-    regex "splitEqs\(0\)"
+prio: // Immediate Contradiction
+    regex "SCIn\(.*<\$cid.*<\$cid"
+prio:
+    regex "!KU\( ~koprf"
 
-// First Part: !KU
-prio: // Find out how the adversary knows XORs of s_enc shares
-    regex "!KU\( \(~s_enc"
-
-// Second Part: !KD
-prio: // Find out how the adversary knows XORs of s_enc shares
-    regex "!KD\( \(~s_enc"
-
-prio: // various cases
-    regex "~~>"
-prio: // continue solving case adversary_recv and solve_dlog
-    isFactName "SCServerIn" & regex ", t, "
-prio: // case adversary_recv
-    isFactName "SCClientIn" & regex ", 'adv', "
-prio: // case bruteforce
-    regex "!HumanGenerated"
-prio: // case eavesdrop_server
-    regex "SCClientToServer"
-prio: // case extract
-    regex "SourceP"
-prio: // case solve_dlog
-    regex "Factor"
