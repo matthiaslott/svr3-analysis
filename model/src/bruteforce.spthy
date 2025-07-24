@@ -33,7 +33,7 @@ rule bruteforce_pair_left: // extend attack by using a known term
     [ !Bruteforce(~v, x), In(y) ]-->[ !Bruteforce(~v, <x, y>) ]
 rule bruteforce_pair_right: // extend attack by using a known term
     [ !In(x), !Bruteforce(~v, y) ]-->[ !Bruteforce(~v, <x, y>) ]
-// fst/snd need not be considered because the equational theory "rewrites them away"
+// fst/snd should not be considered
 
 // hashing
 rule bruteforce_hash:
@@ -65,7 +65,7 @@ rule bruteforce_sign_right:
     [ In(m), In(r), !Bruteforce(~v, k) ]-->[ !Bruteforce(~v, revealSign(m, r, k)) ]
 rule bruteforce_pk:
     [ !Bruteforce(~v, k) ]-->[ !Bruteforce(~v, pk(k)) ]  
-// revealVerify and getMessage need not be considered because they don't occur in messages that are sent on the channel.
+// getMessage should not be considered. revealVerify need not be considered because it doesn't occur in the messages that are sent on the channel.
 
 // multiset
 rule bruteforce_concat:

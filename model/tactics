@@ -42,7 +42,7 @@ prio: // s_enc and secret do not contain the password
     regex "!Bruteforce\( ~(v|w|pw), \(?~(s_enc|secret)"
 
 prio: // Brute-forcing signatures requires bruteforcing or knowing the randomness
-    regex "!KU\( ~r \)" | regex "!Bruteforce\( ~(u|v|w|pw), pk\(~r\) \)" | regex "!Bruteforce\( ~(u|v|w|pw), ~r \)"
+    regex "!KU\( ~r\d \)" | regex "!Bruteforce\( ~(u|v|w|pw), pk\(~r\d\) \)" | regex "!Bruteforce\( ~(u|v|w|pw), ~r\d \)"
 prio:
     regex "!Bruteforce\( ~pw,\s+revealSign\("
 
@@ -61,7 +61,7 @@ prio:
 prio:
     regex "SCIn" & regex "revealSign"
 prio:
-    regex "!KU\( ~r \)"
+    regex "!KU\( ~r\d \)"
 prio: // Find out how the adversary knew the signature
     regex "!KU\( revealSign\(" | regex "!KU\( KDF\(h\(<~pw" | regex "!KU\( h\(<~pw"
 prio:

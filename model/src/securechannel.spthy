@@ -13,10 +13,9 @@ rule forward[color=#ffffff]:
   --[ Communication($sender, $receiver) ]->
     [ SCIn($sender, $receiver, msg), !SCKnows($sender, msg), !SCKnows($receiver, msg) ]
 
-// Servers never directly communicate with each other: They never initialise communication, they only respond to requests.
-// A server will never start communicating with another server.
-// Important: This still allows for servers BELIEVING they talk to other servers because the channel is not authenticated.
-restriction no_communication_between_servers:
+// Communication happens between clients (or 'adv') and the servers.
+// Thus, no two servers communicate with each other.
+restriction communication_between_clients_and_servers:
     "All s r #i #j #k. Communication(s, r)@#i & !Server(s)@#j & !Server(r)@#k ==> F"
 
 

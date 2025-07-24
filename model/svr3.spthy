@@ -20,7 +20,7 @@ predicates:
   , DISTINCT(x, y, z) <=> not (x = y | x = z | y = z)
 
 functions:
-  KDF/2
+    KDF/2
 
 // non-deterministic revealing signatures with a similar interface to the revealing-signing built-in
 #include "src/signature.spthy"
@@ -44,7 +44,9 @@ functions:
 
 rule create_server:
     []
-  --[ _restrict(NEQ($sid, 'adv')) // The adversary may compromise the servers, but can't operate as its own server. Without this restriction, the adversary could compromise 1 server ('adv') without Tamarin properly tracking it.
+  --[ // The adversary may compromise the servers, but can't operate as its own server.
+      // Without this restriction, the adversary could compromise 1 server ('adv') without Tamarin properly tracking it.
+      _restrict(NEQ($sid, 'adv'))
     , !Server($sid) ]->
     [ !Server($sid) ]
 
@@ -79,7 +81,7 @@ rule solve_dlog_key[no_derivcheck, color=#d66f7c]: // pk(sk) -> sk
 // Each client can store and register multiple secrets. Nondeterminism ensures that it is possible to get the correct responses back from the servers.
 rule client_initialise[color=#77b58d]:
     [ Fr(~pw), Fr(~secret) ]
-  --[ _restrict(NEQ($cid, 'adv')) // The adversary may contact the servers, but can't operate as its own client. Without this restriction, it would be as if the adversary could compromise 1 client ('adv').
+  --[ _restrict(NEQ($cid, 'adv')) // The adversary isn't a client, they can only *act* like one. Otherwise, the adversary could create their own secrecy claims.
     , !HumanGenerated(~pw) ]->
     [ Client_0($cid, ~pw, ~secret), !HumanGenerated(~pw) ]
 
@@ -96,9 +98,6 @@ rule client_register[color=#77b58d]:
         kvfy1 = pk(ksign1)
         kvfy2 = pk(ksign2)
         kvfy3 = pk(ksign3)
-        // why not AEAD: AEAD doesn't make the adversary weaker because they can still derive the same messages.
-        // In a sense, the adversary works together with Tamarin and may try infinitely many keys. Tamarin will be telling us if the adversary "won".
-        // Furthermore, this weakens the client, as they doesn't work with Tamarin and now can't tell anymore if decryption was successful.
         encrypted_secret = senc(~secret, kenc)  
     in
     [ Client_0($cid, ~pw, ~secret)
@@ -176,7 +175,7 @@ rule server_reconstruct_phase1[no_derivcheck, color=#7793b5]:
     , SourceC(mul(factors ++ koprf_share, hpw))
     , SourcesPoint(hpw) ]->
     [ SCOut($sid, $client, mul(factors ++ koprf_share, hpw))
-    //, !BruteforceCandidate(mul(factors ++ koprf_share, hpw)) // We do not consider brute-forcing on server message for now
+    //, !BruteforceCandidate(mul(factors ++ koprf_share, hpw)) // We do not consider brute-forcing on server message for performance reasons
     , Server_2($sid, $cid, s_enc_share, kvfy, bhpw) ]
 
 
@@ -194,27 +193,26 @@ rule client_reconstruct_phase2[no_derivcheck, color=#77b58d]:
         c1 = h(<$cid, $sid1, B>) // $cid and $sids stand for the ChannelBinding
         c2 = h(<$cid, $sid2, B>)
         c3 = h(<$cid, $sid3, B>)
-        R = pk(~r)
-        sig1 = revealSign(c1, ~r, ksign1)
-        sig2 = revealSign(c2, ~r, ksign2)
-        sig3 = revealSign(c3, ~r, ksign3)
+        sig1 = revealSign(c1, ~r1, ksign1)
+        sig2 = revealSign(c2, ~r2, ksign2)
+        sig3 = revealSign(c3, ~r3, ksign3)
     in 
     [ Client_2($cid, ~pw, $sid1, $sid2, $sid3, ~b)
     , SCIn($sid1, $cid, mul(~b ++ koprf1, hpw))
     , SCIn($sid2, $cid, mul(~b ++ koprf2, hpw))
     , SCIn($sid3, $cid, mul(~b ++ koprf3, hpw))
-    , Fr(~r) ]
+    , Fr(~r1), Fr(~r2), Fr(~r3) ]
   --[ ClientReconstructPhase2($cid, ~pw)
     , Kauth($sid1, kauth)
     , Kauth($sid2, kauth)
     , Kauth($sid3, kauth)
-    , SourceC(<sig1, R>), SourceC(<sig2, R>), SourceC(<sig3, R>)
-    , SourceD(~r) ]->
-    [ SCOut($cid, $sid1, <sig1, R>)
-    , SCOut($cid, $sid2, <sig2, R>)
-    , SCOut($cid, $sid3, <sig3, R>)
+    , SourceC(<sig1, pk(~r1)>), SourceC(<sig2, pk(~r2)>), SourceC(<sig3, pk(~r3)>)
+    , SourceD(~r1), SourceD(~r2), SourceD(~r3) ]->
+    [ SCOut($cid, $sid1, <sig1, pk(~r1)>)
+    , SCOut($cid, $sid2, <sig2, pk(~r2)>)
+    , SCOut($cid, $sid3, <sig3, pk(~r3)>)
     , !BruteforceCandidate(c1), !BruteforceCandidate(c2), !BruteforceCandidate(c3) // Signatures are revealing, the adversary may extract the message and try to bruteforce that
-    , !BruteforceCandidate(<sig1, R>), !BruteforceCandidate(<sig2, R>), !BruteforceCandidate(<sig3, R>)
+    , !BruteforceCandidate(<sig1, pk(~r1)>), !BruteforceCandidate(<sig2, pk(~r2)>), !BruteforceCandidate(<sig3, pk(~r3)>)
     , Client_3($cid, ~pw, kauth, $sid1, $sid2, $sid3) ]
     
 rule server_reconstruct_phase2[color=#7793b5]:
@@ -227,7 +225,7 @@ rule server_reconstruct_phase2[color=#7793b5]:
   --[ _restrict(revealVerify(sig, c, R, kvfy) = true)
     , ServerAction() ]->
     [ SCOut($sid, $client, s_enc_share)
-    //, !BruteforceCandidate(s_enc_share) // We do not consider brute-forcing on server message for now
+    //, !BruteforceCandidate(s_enc_share) // We do not consider brute-forcing on server message for performance reasons
     ]
 
 
