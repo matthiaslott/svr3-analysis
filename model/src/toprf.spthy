@@ -28,7 +28,7 @@ rule mul_up[no_derivcheck, color=#d66f7c]:
 
 
 // Construction Rules
-rule combine[no_derivcheck, color=#d66f7c]: // [a]x, [b]x -> [a*b]x
+rule combine[no_derivcheck, color=#d66f7c]: // [a]x, [b]x -> [a+b]x
     [ !MulU(mul(a, x)), !MulU(mul(b, x)) ]
   --[ AdversaryAction()
     , KMul(mul(a ++ b, x))
