@@ -4,7 +4,7 @@ This repository contains a formalisation of the SVR3 protocol in Tamarin.
 
 ## Information
 
-Proof generation is not entirely automated. Hence, the full proofs are provided in file [proof.spthy](proof/proof.spthy). They may be verified using the command below. Please plan for around 35 GB RAM usage and 3h of verification time.
+Proof generation is not entirely automated. Hence, the full proofs are provided in file [proof.spthy](proof/proof.spthy). They may be verified using the command below. Please plan for around 35 GB RAM usage and 3h of verification time using 10 cores.
 
 ```bash
 tamarin-prover proof/proof.spthy

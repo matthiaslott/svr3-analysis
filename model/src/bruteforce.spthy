@@ -85,7 +85,7 @@ rule bruteforce_mul:
 // One might wonder why there are no brute-force rules to capture the behaviour of the combine/add/remove/extract rules from toprf.spthy.
 // As we did not use an equational theory, Tamarin does not handle this automatically for us. Some care is required:
 // - Deconstruction Rules: If the adversary knows Bruteforce([ab]P) and wishes to (w.l.o.g.) obtain Bruteforce([b]P) or even Bruteforce(P),
-//   if suffices to analyse how they constructed Bruteforce([ab]P). We have In(a ++ b) and Bruteforce(P).
+//   it suffices to analyse how they constructed Bruteforce([ab]P). We have In(a ++ b) and Bruteforce(P).
 //   Because our model only ever leaks "single factors", In(a ++ b) implies In(a) and In(b), hence Bruteforce([b]P).
 // - Construction Rules: Both construction rules output terms of the form [ab]P. The only reason an adversary might want to brute-force [ab]P instead of [a]P or [b]P
 //   is if they knew ab but not a and b. As argued above, it is impossible to have In(a ++ b) while not being able to derive In(a) and In(b).

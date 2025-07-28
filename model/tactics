@@ -48,7 +48,8 @@ prio:
 
 prio:
     regex "!KU\( ~koprf"
-
+prio:
+    regex "!Bruteforce\( ~w, mul"
 
 // Senc Share
 tactic: senc_share_secrecy

@@ -123,6 +123,7 @@ rule client_register[color=#77b58d]:
     [ Out(encrypted_secret) // Not annotated with $cid becase we do not strive for success guarantees
     , !BruteforceCandidate(encrypted_secret)
     , !BruteforceCandidate(~secret) // The adversary might be able to somehow decrypt the encrypted secret and then perform a brute-force attack
+    , !BruteforceCandidate(kenc) // The adversary might be able to guess kenc and check whether the obtained secret looks somewhat reasonable
     , SCOut($cid, $sid1, <$cid, ~koprf1, ~s_enc1, kvfy1>)
     , SCOut($cid, $sid2, <$cid, ~koprf2, ~s_enc2, kvfy2>)
     , SCOut($cid, $sid3, <$cid, ~koprf3, ~s_enc3, kvfy3>)
