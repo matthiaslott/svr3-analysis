@@ -1,7 +1,8 @@
 // Scalar Multiplication for TOPRF:
 // - mul(f, x) stands for the multiplication of point x with factors f
 // - f is a multiset of factors
-// - mul is modelled as a private function because we want to ensure that all factors are fresh and have a corresponding !Factor fact.
+// - mul is modelled as a private function because we want to ensure that all factors are fresh and have a corresponding
+//   !Factor fact.
 // - Combination of T-OPRF responses is modelled in rule combine
 // - Rules add/remove/extract model multiplication with adversarially known factors (or their inverses)
 

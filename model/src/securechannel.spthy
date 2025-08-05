@@ -1,12 +1,13 @@
 // Secure Channel:
-// - The channel is not modelled symmetrically. The servers can be authenticated, while clients cannot be. They are nevertheless denoted with a public value.
-//   To avoid "upgrading" this into an authenticated channel, the servers should never pattern match the "$sender" variable in another part of a rule
-//   and only use it to send back a response.
+// - The channel is not modelled symmetrically. The servers can be authenticated, while clients cannot be. They are
+//   nevertheless denoted with a public value. To avoid "upgrading" this into an authenticated channel, the servers
+//   should never pattern match the "$sender" variable in another part of a rule and only use it to send back a response.
 // - The adversary can act on behalf of a compromised server.
 // - The adversary can impersonate a client (e.g. inside attacker that has access to authentication server)
 // - The adversary may not replay or reflect messages if the server isn't compromised.
-//   This is not an issue because protection against these attacks only requires adding tags/sequence numbers to messages.
-//   Once the server is compromised or the adversary is impersonating an honest client, replays/reflections are possible.
+//   This is not an issue because protection against these attacks only requires adding tags/sequence numbers to
+//   messages. Once the server is compromised or the adversary is impersonating an honest client, replays/reflections
+//   are possible.
 
 rule forward[color=#ffffff]:
     [ SCOut($sender, $receiver, msg) ]
