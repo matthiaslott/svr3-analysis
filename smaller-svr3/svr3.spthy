@@ -1,0 +1,283 @@
+theory SVR3
+
+// Models a simpler underapproximation of the SVR3 protocol:
+// - Only the special case with t = n = 3 is modelled
+// - No key rotation is modelled, only a single epoch is considered
+
+// Adversary capabilities:
+// - Server compromise: Observe all the secrets that were stored on the server as well as send/receive messages on their
+//   behalf
+// - Interact with the servers on their own.
+// - Access to client identifiers due to compromise of authentication server
+// - Access to Quantum Computer that solves DLOG.
+// - Brute-force attacks on *some* messages.
+
+begin
+
+builtins: hashing, multiset
+
+predicates:
+    NEQ(x, y) <=> not (x = y)
+  , DISTINCT(x, y, z) <=> not (x = y | x = z | y = z)
+
+// provides: SCOut, SCIn
+// uses: !Server, !Compromised
+#include "src/securechannel.spthy"
+
+// provides: function mul
+#include "src/toprf.spthy"
+
+// provides: !HumanGenerated 
+// uses: !BruteforceCandidate
+#include "src/bruteforce.spthy"
+
+// Proof automation:
+#include "./tactics"
+
+
+// World Building
+
+rule create_server:
+    []
+  --[ // The adversary may compromise the servers, but can't operate as its own server.
+      // Without this restriction, the adversary could compromise 1 server ('adv') without Tamarin properly tracking it.
+      _restrict(NEQ($sid, 'adv'))
+    , !Server($sid) ]->
+    [ !Server($sid) ]
+
+
+// Adversary Capabilities
+
+rule compromise_server[color=#d66f7c]:
+    [ !Server($sid) ]
+  --[ AdversaryAction()
+    , !Compromised($sid) ]->
+    [ !Compromised($sid) ]
+
+// simplification: no knowledge of factor is required
+rule solve_dlog[no_derivcheck, color=#d66f7c]: // [f]x -> f
+    [ !Factor(f) ]
+  --[ AdversaryAction()
+    , PQAdversaryAction() ]->
+    [ Out(f) ]
+
+// Additional adversary capabilities are in the imported files
+
+
+// Protocol
+rule client_initialise[color=#77b58d]:
+    [ Fr(~pw) ]
+  --[ // The adversary isn't a client, they can only *act* like one. Otherwise, the adversary could create their own
+      // secrecy claims.
+      _restrict(NEQ($cid, 'adv')) 
+    , !HumanGenerated(~pw) ]->
+    [ Client_0($cid, ~pw), !HumanGenerated(~pw) ]
+
+// Client Registration    
+rule client_register[color=#77b58d]:
+    let
+        koprf = ~koprf1 ++ ~koprf2 ++ ~koprf3
+        kauth = h(<~pw, mul(koprf, h(~pw))>)
+    in
+    [ Client_0($cid, ~pw)
+    , Fr(~koprf1), Fr(~koprf2), Fr(~koprf3)
+    , !Server($sid1), !Server($sid2), !Server($sid3) ]
+  --[ _restrict(DISTINCT($sid1, $sid2, $sid3))
+    , ClientRegister($cid, ~pw, kauth)
+    , SourceC(<$cid, ~koprf1>)
+    , SourceC(<$cid, ~koprf2>)
+    , SourceC(<$cid, ~koprf3>)
+    , SourceP(h(~pw))
+    , InvolvedServers(~pw, $sid1, $sid2, $sid3)
+    , Secret(~pw, 'pw', ~pw)
+    , Secret(~pw, 'koprf', koprf)
+    , Secret(~pw, 'kauth', kauth) ]->
+    [ SCOut($cid, $sid1, <$cid, ~koprf1>)
+    , SCOut($cid, $sid2, <$cid, ~koprf2>)
+    , SCOut($cid, $sid3, <$cid, ~koprf3>)
+    , !Client_1($cid, ~pw) // forget the secret
+    , !Factor(~koprf1), !Factor(~koprf2), !Factor(~koprf3)
+    ]
+
+// Server Registration
+rule server_register[color=#7793b5]:
+    [ !Server($sid)
+      // Note: $client and $cid don't necessarily match because the client isn't authenticated.
+    , SCIn($client, $sid, <$cid, koprf_share>)
+    ]
+  --[ ServerAction() ]->
+    [ !Server_1($sid, $cid, koprf_share) ]
+
+
+// Client Reconstruction
+rule client_reconstruct[color=#77b58d]:
+    [ !Client_1($cid, ~pw)
+    , Fr(~b)
+    , !Server($sid1), !Server($sid2), !Server($sid3) ]
+  --[ _restrict(DISTINCT($sid1, $sid2, $sid3))
+    , ClientReconstruct($cid, ~pw)
+    , BlindingFactor(~b)
+    , KMul(mul(~b, h(~pw)))
+    , SourceC(<$cid, mul(~b, h(~pw))>)
+    , InvolvedServers(~pw, $sid1, $sid2, $sid3) ]->
+    [ SCOut($cid, $sid1, <$cid, mul(~b, h(~pw))>)
+    , SCOut($cid, $sid2, <$cid, mul(~b, h(~pw))>)
+    , SCOut($cid, $sid3, <$cid, mul(~b, h(~pw))>)
+    , !BruteforceCandidate(mul(~b, h(~pw)))
+    , Client_2($cid, ~pw, $sid1, $sid2, $sid3, ~b)
+    , !Factor(~b) ]
+
+// PATTERN MATCHING FOR:
+// - scalar multiplication with koprf_share
+rule server_reconstruct[no_derivcheck, color=#7793b5]:
+    let
+      bhpw = mul(factors, hpw)
+    in
+    [ !Server_1($sid, $cid, koprf_share)
+      // Note: $client and $cid don't necessarily match because the client isn't authenticated.
+    , SCIn($client, $sid, <$cid, bhpw>) 
+    , !Factor(koprf_share)
+    ]
+  --[ ServerAction()
+    , ServerReconstruct($sid)
+    , KMul(mul(factors ++ koprf_share, hpw))
+    , SourceC(mul(factors ++ koprf_share, hpw))
+    , SourcesPoint(hpw) ]->
+    [ SCOut($sid, $client, mul(factors ++ koprf_share, hpw))
+    // We do not consider brute-forcing on server message for performance reasons
+    //, !BruteforceCandidate(mul(factors ++ koprf_share, hpw))
+    , Server_2($sid, $cid, bhpw) ]
+
+
+// PATTERN MATCHING TO:
+// - deblind with ~b (uses commutativity)
+// - combine the shares
+rule client_reconstruct_finish[no_derivcheck, color=#77b58d]:
+    let
+        koprf = koprf1 ++ koprf2 ++ koprf3
+        kauth = h(<~pw, mul(koprf, hpw)>)
+    in 
+    [ Client_2($cid, ~pw, $sid1, $sid2, $sid3, ~b)
+    , SCIn($sid1, $cid, mul(~b ++ koprf1, hpw))
+    , SCIn($sid2, $cid, mul(~b ++ koprf2, hpw))
+    , SCIn($sid3, $cid, mul(~b ++ koprf3, hpw)) ]
+  --[ ClientReconstructFinish($cid, ~pw, kauth) ]->
+    []
+
+
+restriction servers_offline:
+    "All #i #j. PQAdversaryAction()@#i & ServerAction()@#j ==> #j < #i"
+
+
+// Sources lemma:
+
+// SourcesAdversaryRecv: Tamarin believes any msg can be derived using rule adversary_recv.
+// But:
+// - Out comes from SCIn
+// - SCIn comes from SCOut
+// - SCOut comes from various protocol rules
+
+// SourcesPoint is an invariant that says: The point is either h(pw) or the adversary knows it.
+lemma types[sources,heuristic={sources_lemma}]: // autoprove
+    "(All msg #i.
+      SourcesAdversaryRecv(msg)@#i
+      ==>
+      ( (Ex #j. SourceC(msg)@#j & #j < #i)
+      | (Ex #j. !KU(msg)@#j & #j < #i)
+      )
+    ) & (All x #i.
+      SourcesPoint(x)@#i
+      ==>
+      ( (Ex #j. SourceP(x)@#j & #j < #i)
+      | (Ex #j. !KU(x)@#j & #j < #i)
+      )
+    )"
+
+lemma executability: // sanity check for protocol model
+    exists-trace "
+      // adversary doesn't do anything
+      not (Ex #i. AdversaryAction()@#i)
+      &
+      // client only registers once
+      (All cid pw1 pw2 kauth1 kauth2 #i #j.
+        ClientRegister(cid, pw1, kauth1)@#i & ClientRegister(cid, pw2, kauth2)@#j ==> #i = #j
+      ) &
+      // client only attempts reconstruction once
+      (All cid pw1 pw2 #i #j. ClientReconstruct(cid, pw1)@#i & ClientReconstruct(cid, pw2)@#j ==> #i = #j)
+      &
+      // servers perform reconstruction only once
+      (All sid #i #j. ServerReconstruct(sid)@#i & ServerReconstruct(sid)@#j ==> #i = #j)
+      &
+      // servers from registration are reused for recovery
+      (All id sid1 sid2 sid3 #i id2 sid4 sid5 sid6 #j.
+        InvolvedServers(id, sid1, sid2, sid3)@#i & InvolvedServers(id2, sid4, sid5, sid6)@#j
+          ==> id = id2 & sid1 = sid4 & sid2 = sid5 & sid3 = sid6
+      ) &
+      Ex cid pw kauth #i #j #k.
+      ( ClientRegister(cid, pw, kauth)@#i 
+      & ClientReconstruct(cid, pw)@#j
+      & ClientReconstructFinish(cid, pw, kauth)@#k
+      )
+    "
+
+
+lemma post_quantum_attack: // sanity check for adversary capabilities
+    exists-trace "
+      // client only registers once
+      (All cid pw1 pw2 kauth1 kauth2 #i #j.
+        ClientRegister(cid, pw1, kauth1)@#i & ClientRegister(cid, pw2, kauth2)@#j ==> #i = #j
+      ) &
+      // client only attempts reconstruction once
+      (All cid pw1 pw2 #i #j. ClientReconstruct(cid, pw1)@#i & ClientReconstruct(cid, pw2)@#j ==> #i = #j)
+      & 
+      // servers from registration are reused for recovery
+      (All id sid1 sid2 sid3 #i id2 sid4 sid5 sid6 #j.
+        InvolvedServers(id, sid1, sid2, sid3)@#i & InvolvedServers(id2, sid4, sid5, sid6)@#j
+          ==> id = id2 & sid1 = sid4 & sid2 = sid5 & sid3 = sid6
+      ) &
+      // attack
+      Ex id pw koprf kauth #i #j #k #l #m #n.
+          Secret(id, 'pw', pw)@#i & !KU(pw)@#j
+        & Secret(id, 'koprf', koprf)@#k & !KU(koprf)@#l
+        & Secret(id, 'kauth', kauth)@#m & !KU(kauth)@#n
+        & not (Ex sid1 sid2 sid3 #o #p #q #r.
+            InvolvedServers(id, sid1, sid2, sid3)@#o
+          & !Compromised(sid1)@#p & !Compromised(sid2)@#q & !Compromised(sid3)@#r
+          )
+    "
+
+// MAIN SECRECY GOAL
+// The only way the adversary can get rid of the blinding factor of the client is with a quantum computer
+lemma mul_invariant[reuse,use_induction,heuristic={mul_invariant}]:
+    "All f pw #i. KMul(mul(f, h(pw)))@#i & (Ex #j. !HumanGenerated(pw)@#j) // If multiplication with a password hash on the right side, then
+      ==> (Ex #k. BlindingFactor(f)@#k) // f contains a secret factor
+      | (Ex a b #k. BlindingFactor(b)@#k & f = a ++ b) // f contains a secret factor
+      | (Ex #k. PQAdversaryAction()@#k & #k < #i) // adversary used a QC to possibly find the secret factor
+      | (Ex #k. !KU(pw)@#k & #k < #i)" // don't want to deal with the case where adversary knows the password already
+
+lemma pw_pre_quantum_secrecy[reuse,heuristic={pw_pre_quantum_secrecy}]:
+    "All id pw #i. Secret(id, 'pw', pw)@#i
+      ==> (not Ex #j. !KU(pw)@#j)
+      | (Ex sid1 sid2 sid3 #j #k #l #m. InvolvedServers(id, sid1, sid2, sid3)@#j
+          & !Compromised(sid1)@#k & !Compromised(sid2)@#l & !Compromised(sid3)@#m
+        )
+      | (Ex #j #k. !KU(pw)@#j & PQAdversaryAction()@#k & #k < #j)"
+
+// LEMMAS FOR ADDITIONAL INVESTIGATION
+lemma koprf_pre_quantum_secrecy[heuristic={koprf_pre_quantum_secrecy},hide_lemma=mul_invariant,hide_lemma=pw_pre_quantum_secrecy]:
+    "All id koprf #i. Secret(id, 'koprf', koprf)@#i
+      ==> (not Ex #j. KU(koprf)@#j)
+      | (Ex sid1 sid2 sid3 #j #k #l #m. InvolvedServers(id, sid1, sid2, sid3)@#j
+          & !Compromised(sid1)@#k & !Compromised(sid2)@#l & !Compromised(sid3)@#m
+        )
+      | (Ex #j #k. KU(koprf)@#j & PQAdversaryAction()@#k & #k < #j)"
+
+lemma kauth_pre_quantum_secrecy[hide_lemma=mul_invariant]:
+    "All id kauth #i. Secret(id, 'kauth', kauth)@#i
+      ==> (not Ex #j. !KU(kauth)@#j)
+      | (Ex sid1 sid2 sid3 #j #k #l #m. InvolvedServers(id, sid1, sid2, sid3)@#j
+          & !Compromised(sid1)@#k & !Compromised(sid2)@#l & !Compromised(sid3)@#m
+        )
+      | (Ex #j #k. !KU(kauth)@#j & PQAdversaryAction()@#k & #k < #j)"
+
+end
