@@ -263,6 +263,7 @@ lemma pw_pre_quantum_secrecy[reuse,heuristic={pw_pre_quantum_secrecy}]:
         )
       | (Ex #j #k. !KU(pw)@#j & PQAdversaryAction()@#k & #k < #j)"
 
+
 // LEMMAS FOR ADDITIONAL INVESTIGATION
 lemma koprf_pre_quantum_secrecy[heuristic={koprf_pre_quantum_secrecy},hide_lemma=mul_invariant,hide_lemma=pw_pre_quantum_secrecy]:
     "All id koprf #i. Secret(id, 'koprf', koprf)@#i
