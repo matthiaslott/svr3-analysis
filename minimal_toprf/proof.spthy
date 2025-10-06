@@ -1,0 +1,3970 @@
+theory TOPRF begin
+
+// Function signature and definition of the equational theory E
+
+builtins: multiset
+functions: fst/1, h/1, mul/2, pair/2, snd/1
+equations: fst(<x.1, x.2>) = x.1, snd(<x.1, x.2>) = x.2
+
+tactic: sources
+presort: s
+prio: {id}
+  regex"SourceP"
+prio: {id}
+  regex"!MulU\(" | regex"!KU\(mul\("
+
+
+tactic: mul_invariant
+presort: s
+prio: {id}
+  regex"!KU\(~b" | regex"!KU\(h\(~b"
+prio: {id}
+  regex"BlindingFactor"
+prio: {id}
+  regex"!MulU\(mul\(b,h\(x\)\)"
+
+
+tactic: input_secrecy
+presort: s
+prio: {id}
+  regex"!KU\(~b" | regex"!KU\(h\(~b"
+
+
+
+
+
+
+
+
+
+predicate: DISTINCT( x, y, z )<=>¬(((x = y) ∨ (x = z)) ∨ (y = z))
+
+rule (modulo E) mul_down[color=#d66f7c, no_derivcheck]:
+   [ In( mul(f, x) ) ] --> [ !MulD( mul(f, x) ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) mul_coerce[color=#d66f7c, no_derivcheck]:
+   [ !MulD( mul(f, x) ) ]
+  --[ KMul( mul(f, x) ) ]->
+   [ !MulU( mul(f, x) ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) mul_up[color=#d66f7c, no_derivcheck]:
+   [ !MulU( mul(f, x) ) ] --> [ Out( mul(f, x) ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) combine[color=#d66f7c, no_derivcheck]:
+   [ !MulU( mul(a, x) ), !MulU( mul(b, x) ) ]
+  --[ KMul( mul((a++b), x) ), SourcesPoint( x ), AdversaryAction( )
+  ]->
+   [ !MulU( mul((a++b), x) ) ]
+
+  // loop breakers: [0,1]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) add[color=#d66f7c, no_derivcheck]:
+   [ In( ~a ), !MulU( mul(b, x) ) ]
+  --[ KMul( mul((~a++b), x) ), SourcesPoint( x ), AdversaryAction( )
+  ]->
+   [ !MulU( mul((~a++b), x) ) ]
+
+  // loop breaker: [1]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) remove[color=#d66f7c, no_derivcheck]:
+   [ In( a ), !MulD( mul((a++b), x) ) ]
+  --[ KMul( mul(b, x) ), SourcesPoint( x ), AdversaryAction( ) ]->
+   [ !MulD( mul(b, x) ) ]
+
+  // loop breaker: [1]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) extract[color=#d66f7c, no_derivcheck]:
+   [ In( a ), !MulD( mul(a, x) ) ]
+  --[ KMul( mul(a, x) ), SourcesPoint( x ), AdversaryAction( ) ]->
+   [ Out( x ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) bruteforce[no_derivcheck]:
+   [ In( h(~x) ) ] --[ AdversaryAction( ) ]-> [ Out( ~x ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) compromise:
+   [ !Initialised( $C, $Si, koprfi ) ]
+  --[ Compromised( $Si ), AdversaryAction( ) ]->
+   [ Out( koprfi ) ]
+
+  /* has exactly the trivial AC variant */
+
+restriction Restr_init_client_1:
+  "∀ x #NOW x.1 x.2 x.3 x.4 x.5.
+    (Restr_init_client_1( x, x.1, x.2, x.3, x.4, x.5 ) @ #NOW) ⇒
+    (¬(((x = x.1) ∨ (x.2 = x.3)) ∨ (x.4 = x.5)))"
+  // safety formula
+
+rule (modulo E) init_client:
+   [ Fr( ~x ), Fr( ~koprf1 ), Fr( ~koprf2 ), Fr( ~koprf3 ) ]
+  --[
+  ClientInitialise( $C, $S1, $S2, $S3, ~x,
+                    h(<~x, mul((~koprf1++~koprf2++~koprf3), h(~x))>)
+  ),
+  Restr_init_client_1( $S1, $S2, $S1, $S3, $S2, $S3 )
+  ]->
+   [
+   !ClientInit( $C, $S1, $S2, $S3, ~x ), Out( <$C, $S1, ~koprf1> ),
+   Out( <$C, $S2, ~koprf2> ), Out( <$C, $S3, ~koprf3> )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) init_server:
+   [ In( <$C, $Si, koprfi> ) ] --> [ !Initialised( $C, $Si, koprfi ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) evaluate_client:
+   [ !ClientInit( $C, $S1, $S2, $S3, ~x ), Fr( ~b ) ]
+  --[
+  ClientEvaluate( $C, $S1, $S2, $S3, ~x ), SourceP( h(~x) ),
+  BlindingFactor( ~b )
+  ]->
+   [
+   ClientEval( $C, $S1, $S2, $S3, ~x, ~b ),
+   Out( <$C, $S1, mul(~b, h(~x))> ), Out( <$C, $S2, mul(~b, h(~x))> ),
+   Out( <$C, $S3, mul(~b, h(~x))> )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) evaluate_server[no_derivcheck]:
+   [
+   In( <$C, $Si, mul(factors, hx)> ), !Initialised( $C, $Si, koprfi )
+   ]
+  --[ SourcesPoint( hx ), KMul( mul((factors++koprfi), hx) ) ]->
+   [ Out( <$C, $Si, mul((factors++koprfi), hx)> ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) evaluate_finish[no_derivcheck]:
+   [
+   ClientEval( $C, $S1, $S2, $S3, ~x, ~b ),
+   In( <$C, $S1, mul((~b++koprf1), hx)> ),
+   In( <$C, $S2, mul((~b++koprf2), hx)> ),
+   In( <$C, $S3, mul((~b++koprf3), hx)> )
+   ]
+  --[
+  ClientFinish( $C, $S1, $S2, $S3, ~x,
+                h(<~x, mul((koprf1++koprf2++koprf3), hx)>)
+  )
+  ]->
+   [ ]
+
+  /* has exactly the trivial AC variant */
+
+lemma types [sources, heuristic={sources}]:
+  all-traces
+  "∀ p #i.
+    (SourcesPoint( p ) @ #i) ⇒
+    ((∃ #j. (SourceP( p ) @ #j) ∧ (#j < #i)) ∨
+     (∃ #j. (!KU( p ) @ #j) ∧ (#j < #i)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ p #i.
+  (SourcesPoint( p ) @ #i)
+ ∧
+  (∀ #j. (SourceP( p ) @ #j) ⇒ ¬(#j < #i)) ∧
+  (∀ #j. (!KU( p ) @ #j) ⇒ ¬(#j < #i))"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  solve( (last(#i))  ∥
+         (∃ #j. (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #i))  ∥
+         (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #i)) )
+    case case_1
+    solve( SourcesPoint( p ) @ #i )
+      case add
+      solve( !MulU( mul(b, p) ) ▶₁ #i )
+        case add
+        solve( (∃ #j. (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+               (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2
+          by contradiction /* from formulas */
+        qed
+      next
+        case combine
+        solve( (∃ #j. (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+               (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2
+          by contradiction /* from formulas */
+        qed
+      next
+        case mul_coerce_case_1
+        solve( !KU( mul(b, p) ) @ #vk.1 )
+          case c_mul
+          by contradiction /* from formulas */
+        next
+          case evaluate_client_case_1
+          by contradiction /* from formulas */
+        next
+          case evaluate_client_case_2
+          by contradiction /* from formulas */
+        next
+          case evaluate_client_case_3
+          by contradiction /* from formulas */
+        next
+          case evaluate_server
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case extract_case_1
+          solve( (∃ #j.
+                   (SourceP( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* impossible chain */
+          next
+            case case_2
+            by contradiction /* cyclic */
+          qed
+        next
+          case extract_case_2
+          solve( (∃ #j.
+                   (SourceP( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* impossible chain */
+          next
+            case case_2
+            by contradiction /* cyclic */
+          qed
+        next
+          case mul_up_case_1
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.4))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.4)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_2
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.3))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.3)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_3
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.3))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.3)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        qed
+      next
+        case mul_coerce_case_2
+        solve( (∃ #j.
+                 (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1))  ∥
+               (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2
+          by contradiction /* from formulas */
+        qed
+      qed
+    next
+      case combine
+      solve( !MulU( mul(a, p) ) ▶₀ #i )
+        case add
+        solve( (∃ #j. (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+               (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2
+          by contradiction /* from formulas */
+        qed
+      next
+        case combine
+        solve( (∃ #j. (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+               (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2
+          by contradiction /* from formulas */
+        qed
+      next
+        case mul_coerce_case_1
+        solve( !KU( mul(a, p) ) @ #vk )
+          case c_mul
+          by contradiction /* from formulas */
+        next
+          case evaluate_client_case_1
+          by contradiction /* from formulas */
+        next
+          case evaluate_client_case_2
+          by contradiction /* from formulas */
+        next
+          case evaluate_client_case_3
+          by contradiction /* from formulas */
+        next
+          case evaluate_server
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case extract_case_1
+          solve( (∃ #j.
+                   (SourceP( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* impossible chain */
+          next
+            case case_2
+            by contradiction /* cyclic */
+          qed
+        next
+          case extract_case_2
+          solve( (∃ #j.
+                   (SourceP( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* impossible chain */
+          next
+            case case_2
+            by contradiction /* cyclic */
+          qed
+        next
+          case mul_up_case_1
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.4))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.4)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_2
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.3))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.3)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_3
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.3))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.3)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        qed
+      next
+        case mul_coerce_case_2
+        solve( (∃ #j.
+                 (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1))  ∥
+               (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2
+          by contradiction /* from formulas */
+        qed
+      qed
+    next
+      case evaluate_server
+      solve( !KU( mul(factors, p) ) @ #vk.4 )
+        case c_mul
+        by contradiction /* from formulas */
+      next
+        case evaluate_client_case_1
+        by contradiction /* from formulas */
+      next
+        case evaluate_client_case_2
+        by contradiction /* from formulas */
+      next
+        case evaluate_client_case_3
+        by contradiction /* from formulas */
+      next
+        case evaluate_server
+        solve( (∃ #j. (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+               (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2
+          by contradiction /* from formulas */
+        qed
+      next
+        case extract_case_1
+        solve( (∃ #j. (SourceP( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+               (∃ #j. (!KU( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+          case case_1
+          by contradiction /* impossible chain */
+        next
+          case case_2
+          by contradiction /* cyclic */
+        qed
+      next
+        case extract_case_2
+        solve( (∃ #j. (SourceP( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+               (∃ #j. (!KU( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+          case case_1
+          by contradiction /* impossible chain */
+        next
+          case case_2
+          by contradiction /* cyclic */
+        qed
+      next
+        case mul_up_case_1
+        solve( (∃ #j.
+                 (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+               (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2
+          by contradiction /* from formulas */
+        qed
+      next
+        case mul_up_case_2
+        solve( (∃ #j.
+                 (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1))  ∥
+               (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2
+          by contradiction /* from formulas */
+        qed
+      next
+        case mul_up_case_3
+        solve( (∃ #j.
+                 (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1))  ∥
+               (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2
+          by contradiction /* from formulas */
+        qed
+      qed
+    next
+      case extract
+      solve( !MulD( mul(a, p) ) ▶₁ #i )
+        case mul_down
+        solve( !KU( mul(a, p) ) @ #vk.1 )
+          case c_mul
+          by contradiction /* from formulas */
+        next
+          case evaluate_client_case_1
+          by contradiction /* from formulas */
+        next
+          case evaluate_client_case_2
+          by contradiction /* from formulas */
+        next
+          case evaluate_client_case_3
+          by contradiction /* from formulas */
+        next
+          case evaluate_server
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case extract_case_1
+          solve( (∃ #j.
+                   (SourceP( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1))  ∥
+                 (∃ #j. (!KU( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1)) )
+            case case_1
+            by contradiction /* impossible chain */
+          next
+            case case_2
+            by contradiction /* cyclic */
+          qed
+        next
+          case extract_case_2
+          solve( (∃ #j.
+                   (SourceP( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1))  ∥
+                 (∃ #j. (!KU( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1)) )
+            case case_1
+            by contradiction /* impossible chain */
+          next
+            case case_2
+            by contradiction /* cyclic */
+          qed
+        next
+          case mul_up_case_1
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.3))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.3)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_2
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_3
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        qed
+      next
+        case remove
+        solve( (∃ #j. (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+               (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2
+          by contradiction /* from formulas */
+        qed
+      qed
+    next
+      case remove
+      solve( !MulD( mul((a++b), p) ) ▶₁ #i )
+        case mul_down
+        solve( !KU( mul((a++b), p) ) @ #vk.1 )
+          case c_mul
+          by contradiction /* from formulas */
+        next
+          case evaluate_server_case_1
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case evaluate_server_case_2
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case evaluate_server_case_3
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case evaluate_server_case_4
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case evaluate_server_case_5
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case evaluate_server_case_6
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case evaluate_server_case_7
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case extract_case_1
+          solve( (∃ #j.
+                   (SourceP( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1))  ∥
+                 (∃ #j. (!KU( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1)) )
+            case case_1
+            by contradiction /* impossible chain */
+          next
+            case case_2
+            by contradiction /* cyclic */
+          qed
+        next
+          case extract_case_2
+          solve( (∃ #j.
+                   (SourceP( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1))  ∥
+                 (∃ #j. (!KU( t ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.1)) )
+            case case_1
+            by contradiction /* impossible chain */
+          next
+            case case_2
+            by contradiction /* cyclic */
+          qed
+        next
+          case mul_up_case_01
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.3))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.3)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_02
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_03
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_04
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_05
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_06
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_07
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_08
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_09
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_10
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_11
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_12
+          solve( (∃ #j.
+                   (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2))  ∥
+                 (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          qed
+        qed
+      next
+        case remove
+        solve( (∃ #j. (SourceP( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr))  ∥
+               (∃ #j. (!KU( p ) @ #j) ∧ (¬(last(#j))) ∧ (#j < #vr)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2
+          by contradiction /* from formulas */
+        qed
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  next
+    case case_3
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma executability:
+  exists-trace
+  "(¬(∃ #i. AdversaryAction( ) @ #i)) ∧
+   (∃ C S1 S2 S3 x y #i #j.
+     (ClientInitialise( C, S1, S2, S3, x, y ) @ #i) ∧
+     (ClientFinish( C, S1, S2, S3, x, y ) @ #j))"
+/*
+guarded formula characterizing all satisfying traces:
+"(∀ #i. (AdversaryAction( ) @ #i) ⇒ ⊥) ∧
+ (∃ C S1 S2 S3 x y #i #j.
+   (ClientInitialise( C, S1, S2, S3, x, y ) @ #i) ∧
+   (ClientFinish( C, S1, S2, S3, x, y ) @ #j))"
+*/
+simplify
+  case 1
+  solve( ClientEval( $C, $S1, $S2, $S3, ~x, ~b ) ▶₀ #j )
+    case evaluate_client
+    solve( !KU( mul((~b++~koprf1), h(~x)) ) @ #vk.6 )
+      case c_mul
+      by sorry
+    next
+      case evaluate_server_case_1
+      solve( !KU( mul((~b++~koprf2), h(~x)) ) @ #vk.9 )
+        case c_mul
+        by sorry
+      next
+        case evaluate_server_case_1
+        solve( !KU( mul((~b++~koprf3), h(~x)) ) @ #vk.12 )
+          case c_mul
+          by sorry
+        next
+          case evaluate_server_case_1
+          solve( !KU( ~koprf1 ) @ #vk.23 )
+            case bruteforce
+            by contradiction /* from formulas */
+          next
+            case init_client
+            solve( !KU( ~koprf2 ) @ #vk.29 )
+              case bruteforce
+              by contradiction /* from formulas */
+            next
+              case init_client
+              solve( !KU( ~koprf3 ) @ #vk.34 )
+                case bruteforce
+                by contradiction /* from formulas */
+              next
+                case init_client
+                solve( !KU( mul(~b, h(~x)) ) @ #vk.23 )
+                  case c_mul
+                  by sorry
+                next
+                  case evaluate_client_case_1
+                  SOLVED // trace found
+                next
+                  case evaluate_client_case_2
+                  SOLVED // trace found
+                next
+                  case evaluate_client_case_3
+                  SOLVED // trace found
+                next
+                  case mul_up
+                  by contradiction /* from formulas */
+                qed
+              qed
+            qed
+          qed
+        next
+          case evaluate_server_case_2
+          by sorry
+        next
+          case mul_up_case_1
+          by contradiction /* from formulas */
+        next
+          case mul_up_case_2
+          by contradiction /* from formulas */
+        next
+          case mul_up_case_3
+          by contradiction /* from formulas */
+        next
+          case mul_up_case_4
+          by contradiction /* from formulas */
+        next
+          case mul_up_case_5
+          by contradiction /* from formulas */
+        qed
+      next
+        case evaluate_server_case_2
+        by sorry
+      next
+        case mul_up_case_1
+        by contradiction /* from formulas */
+      next
+        case mul_up_case_2
+        by contradiction /* from formulas */
+      next
+        case mul_up_case_3
+        by contradiction /* from formulas */
+      next
+        case mul_up_case_4
+        by contradiction /* from formulas */
+      next
+        case mul_up_case_5
+        by contradiction /* from formulas */
+      qed
+    next
+      case evaluate_server_case_2
+      by sorry
+    next
+      case mul_up_case_1
+      by contradiction /* from formulas */
+    next
+      case mul_up_case_2
+      by contradiction /* from formulas */
+    next
+      case mul_up_case_3
+      by contradiction /* from formulas */
+    next
+      case mul_up_case_4
+      by contradiction /* from formulas */
+    next
+      case mul_up_case_5
+      by contradiction /* from formulas */
+    qed
+  qed
+next
+  case 2
+  by sorry
+next
+  case 3
+  by sorry
+next
+  case 4
+  by sorry
+next
+  case 5
+  by sorry
+next
+  case 6
+  by sorry
+qed
+
+lemma mul_invariant [reuse, use_induction,
+                     heuristic={mul_invariant}]:
+  all-traces
+  "∀ f x #i.
+    (KMul( mul(f, h(x)) ) @ #i) ⇒
+    (((∃ #k. BlindingFactor( f ) @ #k) ∨
+      (∃ a b #k. (BlindingFactor( b ) @ #k) ∧ (f = (a++b)))) ∨
+     (∃ #k. (!KU( x ) @ #k) ∧ (#k < #i)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ f x #i.
+  (KMul( mul(f, h(x)) ) @ #i)
+ ∧
+  (∀ #k. (BlindingFactor( f ) @ #k) ⇒ ⊥) ∧
+  (∀ a b #k. (BlindingFactor( b ) @ #k) ∧ (f = (a++b)) ⇒ ⊥) ∧
+  (∀ #k. (!KU( x ) @ #k) ⇒ ¬(#k < #i))"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  solve( (last(#i))  ∥
+         (∃ #k. (BlindingFactor( f ) @ #k) ∧ ¬(last(#k)))  ∥
+         (∃ a b #k.
+           (BlindingFactor( b ) @ #k) ∧ (f = (a++b)) ∧ ¬(last(#k)))  ∥
+         (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #i)) )
+    case case_1
+    solve( KMul( mul(f, h(x)) ) @ #i )
+      case add
+      solve( !MulU( mul(b, h(x)) ) ▶₁ #i )
+        case add
+        solve( (∃ #k. (BlindingFactor( (b++~a.1) ) @ #k) ∧ ¬(last(#k)))  ∥
+               (∃ a.2 b.1 #k.
+                 (BlindingFactor( b.1 ) @ #k) ∧ ((b++~a.1) = (b.1++a.2))
+                ∧
+                 ¬(last(#k)))  ∥
+               (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2_case_1
+          by contradiction /* from formulas */
+        next
+          case case_2_case_2
+          by contradiction /* from formulas */
+        next
+          case case_2_case_3
+          by contradiction /* from formulas */
+        next
+          case case_2_case_4
+          by contradiction /* from formulas */
+        next
+          case case_3
+          by contradiction /* from formulas */
+        qed
+      next
+        case combine
+        solve( (∃ #k. (BlindingFactor( (b++a.1) ) @ #k) ∧ ¬(last(#k)))  ∥
+               (∃ a.2 b.1 #k.
+                 (BlindingFactor( b.1 ) @ #k) ∧ ((b++a.1) = (b.1++a.2))
+                ∧
+                 ¬(last(#k)))  ∥
+               (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2_case_1
+          by contradiction /* from formulas */
+        next
+          case case_2_case_2
+          by contradiction /* from formulas */
+        next
+          case case_2_case_3
+          by contradiction /* from formulas */
+        next
+          case case_2_case_4
+          by contradiction /* from formulas */
+        next
+          case case_2_case_5
+          by contradiction /* from formulas */
+        next
+          case case_2_case_6
+          by contradiction /* from formulas */
+        next
+          case case_2_case_7
+          by contradiction /* from formulas */
+        next
+          case case_3
+          by contradiction /* from formulas */
+        qed
+      next
+        case mul_coerce_case_1
+        solve( (∃ #k. (BlindingFactor( b ) @ #k) ∧ ¬(last(#k)))  ∥
+               (∃ a b.1 #k.
+                 (BlindingFactor( b.1 ) @ #k) ∧ (b = (a++b.1)) ∧ ¬(last(#k)))  ∥
+               (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2
+          by contradiction /* from formulas */
+        next
+          case case_3
+          by contradiction /* from formulas */
+        qed
+      next
+        case mul_coerce_case_2
+        solve( (∃ #k. (BlindingFactor( b ) @ #k) ∧ ¬(last(#k)))  ∥
+               (∃ a b.1 #k.
+                 (BlindingFactor( b.1 ) @ #k) ∧ (b = (a++b.1)) ∧ ¬(last(#k)))  ∥
+               (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2
+          by contradiction /* from formulas */
+        next
+          case case_3
+          by contradiction /* from formulas */
+        qed
+      qed
+    next
+      case combine
+      solve( !MulU( mul(b, h(x)) ) ▶₁ #i )
+        case add
+        solve( (∃ #k. (BlindingFactor( (b++~a.1) ) @ #k) ∧ ¬(last(#k)))  ∥
+               (∃ a.2 b.1 #k.
+                 (BlindingFactor( b.1 ) @ #k) ∧ ((b++~a.1) = (b.1++a.2))
+                ∧
+                 ¬(last(#k)))  ∥
+               (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2_case_1
+          by contradiction /* from formulas */
+        next
+          case case_2_case_2
+          by contradiction /* from formulas */
+        next
+          case case_2_case_3
+          by contradiction /* from formulas */
+        next
+          case case_2_case_4
+          by contradiction /* from formulas */
+        next
+          case case_3
+          by contradiction /* from formulas */
+        qed
+      next
+        case combine
+        solve( (∃ #k. (BlindingFactor( (b++a.1) ) @ #k) ∧ ¬(last(#k)))  ∥
+               (∃ a.2 b.1 #k.
+                 (BlindingFactor( b.1 ) @ #k) ∧ ((b++a.1) = (b.1++a.2))
+                ∧
+                 ¬(last(#k)))  ∥
+               (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2_case_1
+          by contradiction /* from formulas */
+        next
+          case case_2_case_2
+          by contradiction /* from formulas */
+        next
+          case case_2_case_3
+          by contradiction /* from formulas */
+        next
+          case case_2_case_4
+          by contradiction /* from formulas */
+        next
+          case case_2_case_5
+          by contradiction /* from formulas */
+        next
+          case case_2_case_6
+          by contradiction /* from formulas */
+        next
+          case case_2_case_7
+          by contradiction /* from formulas */
+        next
+          case case_3
+          by contradiction /* from formulas */
+        qed
+      next
+        case mul_coerce_case_1
+        solve( (∃ #k. (BlindingFactor( b ) @ #k) ∧ ¬(last(#k)))  ∥
+               (∃ a b.1 #k.
+                 (BlindingFactor( b.1 ) @ #k) ∧ (b = (a++b.1)) ∧ ¬(last(#k)))  ∥
+               (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2
+          by contradiction /* from formulas */
+        next
+          case case_3
+          by contradiction /* from formulas */
+        qed
+      next
+        case mul_coerce_case_2
+        solve( (∃ #k. (BlindingFactor( b ) @ #k) ∧ ¬(last(#k)))  ∥
+               (∃ a b.1 #k.
+                 (BlindingFactor( b.1 ) @ #k) ∧ (b = (a++b.1)) ∧ ¬(last(#k)))  ∥
+               (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2
+          by contradiction /* from formulas */
+        next
+          case case_3
+          by contradiction /* from formulas */
+        qed
+      qed
+    next
+      case evaluate_server
+      solve( !Initialised( $C, $Si, koprfi ) ▶₁ #i )
+        case init_server
+        solve( !KU( mul(factors, h(x)) ) @ #vk.6 )
+          case c_mul
+          solve( !KU( h(x) ) @ #vk.9 )
+            case c_h
+            by contradiction /* from formulas */
+          next
+            case extract_case_1
+            solve( (∃ #k. (BlindingFactor( a ) @ #k) ∧ ¬(last(#k)))  ∥
+                   (∃ a.1 b #k.
+                     (BlindingFactor( b ) @ #k) ∧ (a = (b++a.1)) ∧ ¬(last(#k)))  ∥
+                   (∃ #k. (!KU( ~x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.1)) )
+              case case_1
+              solve( !KU( ~b.1 ) @ #vk.10 )
+                case bruteforce
+                solve( !KU( h(~b.1) ) @ #vk.12 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_2
+              solve( !KU( ~b.1 ) @ #vk.13 )
+                case bruteforce
+                solve( !KU( h(~b.1) ) @ #vk.14 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_3
+              by contradiction /* from formulas */
+            qed
+          next
+            case extract_case_2
+            solve( (∃ #k. (BlindingFactor( a ) @ #k) ∧ ¬(last(#k)))  ∥
+                   (∃ a.1 b #k.
+                     (BlindingFactor( b ) @ #k) ∧ (a = (b++a.1)) ∧ ¬(last(#k)))  ∥
+                   (∃ #k. (!KU( ~x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.1)) )
+              case case_1
+              solve( !KU( ~b.1 ) @ #vk.10 )
+                case bruteforce
+                solve( !KU( h(~b.1) ) @ #vk.12 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_2
+              solve( !KU( ~b.1 ) @ #vk.13 )
+                case bruteforce
+                solve( !KU( h(~b.1) ) @ #vk.14 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_3
+              by contradiction /* from formulas */
+            qed
+          qed
+        next
+          case evaluate_client_case_1
+          by contradiction /* from formulas */
+        next
+          case evaluate_client_case_2
+          by contradiction /* from formulas */
+        next
+          case evaluate_client_case_3
+          by contradiction /* from formulas */
+        next
+          case evaluate_server
+          solve( (∃ #k.
+                   (BlindingFactor( (factors++koprfi) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((factors++koprfi) = (a++b))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.1)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_2
+            by contradiction /* from formulas */
+          next
+            case case_2_case_3
+            by contradiction /* from formulas */
+          next
+            case case_2_case_4
+            by contradiction /* from formulas */
+          next
+            case case_2_case_5
+            by contradiction /* from formulas */
+          next
+            case case_2_case_6
+            by contradiction /* from formulas */
+          next
+            case case_2_case_7
+            by contradiction /* from formulas */
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_1
+          solve( (∃ #k. (BlindingFactor( factors ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a b #k.
+                   (BlindingFactor( b ) @ #k) ∧ (factors = (a++b)) ∧ ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_2
+          solve( (∃ #k. (BlindingFactor( (a++b) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.1 b.1 #k.
+                   (BlindingFactor( b.1 ) @ #k) ∧ ((a++b) = (a.1++b.1))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_2
+            by contradiction /* from formulas */
+          next
+            case case_2_case_3
+            by contradiction /* from formulas */
+          next
+            case case_2_case_4
+            by contradiction /* from formulas */
+          next
+            case case_2_case_5
+            by contradiction /* from formulas */
+          next
+            case case_2_case_6
+            by contradiction /* from formulas */
+          next
+            case case_2_case_7
+            by contradiction /* from formulas */
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_3
+          solve( (∃ #k. (BlindingFactor( (~a++b) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.1 b.1 #k.
+                   (BlindingFactor( b.1 ) @ #k) ∧ ((~a++b) = (a.1++b.1))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_2
+            by contradiction /* from formulas */
+          next
+            case case_2_case_3
+            by contradiction /* from formulas */
+          next
+            case case_2_case_4
+            by contradiction /* from formulas */
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        qed
+      qed
+    next
+      case extract
+      solve( !MulD( mul(f, h(x)) ) ▶₁ #i )
+        case mul_down
+        solve( !KU( mul(f, h(x)) ) @ #vk.1 )
+          case c_mul
+          solve( !KU( h(x) ) @ #vk.2 )
+            case c_h
+            by contradiction /* from formulas */
+          next
+            case extract_case_1
+            solve( (∃ #k. (BlindingFactor( a ) @ #k) ∧ ¬(last(#k)))  ∥
+                   (∃ a.1 b #k.
+                     (BlindingFactor( b ) @ #k) ∧ (a = (b++a.1)) ∧ ¬(last(#k)))  ∥
+                   (∃ #k. (!KU( ~x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.1)) )
+              case case_1
+              solve( !KU( ~b.1 ) @ #vk.3 )
+                case bruteforce
+                solve( !KU( h(~b.1) ) @ #vk.5 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_2
+              solve( !KU( ~b.1 ) @ #vk.6 )
+                case bruteforce
+                solve( !KU( h(~b.1) ) @ #vk.7 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_3
+              by contradiction /* from formulas */
+            qed
+          next
+            case extract_case_2
+            solve( (∃ #k. (BlindingFactor( a ) @ #k) ∧ ¬(last(#k)))  ∥
+                   (∃ a.1 b #k.
+                     (BlindingFactor( b ) @ #k) ∧ (a = (b++a.1)) ∧ ¬(last(#k)))  ∥
+                   (∃ #k. (!KU( ~x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.1)) )
+              case case_1
+              solve( !KU( ~b.1 ) @ #vk.3 )
+                case bruteforce
+                solve( !KU( h(~b.1) ) @ #vk.5 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_2
+              solve( !KU( ~b.1 ) @ #vk.6 )
+                case bruteforce
+                solve( !KU( h(~b.1) ) @ #vk.7 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_3
+              by contradiction /* from formulas */
+            qed
+          qed
+        next
+          case evaluate_client_case_1
+          by contradiction /* from formulas */
+        next
+          case evaluate_client_case_2
+          by contradiction /* from formulas */
+        next
+          case evaluate_client_case_3
+          by contradiction /* from formulas */
+        next
+          case evaluate_server
+          solve( (∃ #k.
+                   (BlindingFactor( (factors++koprfi) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((factors++koprfi) = (a++b))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.1)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_2
+            by contradiction /* from formulas */
+          next
+            case case_2_case_3
+            by contradiction /* from formulas */
+          next
+            case case_2_case_4
+            by contradiction /* from formulas */
+          next
+            case case_2_case_5
+            by contradiction /* from formulas */
+          next
+            case case_2_case_6
+            by contradiction /* from formulas */
+          next
+            case case_2_case_7
+            by contradiction /* from formulas */
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_1
+          solve( (∃ #k. (BlindingFactor( f ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a b #k.
+                   (BlindingFactor( b ) @ #k) ∧ (f = (a++b)) ∧ ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_2
+          solve( (∃ #k. (BlindingFactor( (a++b) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.1 b.1 #k.
+                   (BlindingFactor( b.1 ) @ #k) ∧ ((a++b) = (a.1++b.1))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_2
+            by contradiction /* from formulas */
+          next
+            case case_2_case_3
+            by contradiction /* from formulas */
+          next
+            case case_2_case_4
+            by contradiction /* from formulas */
+          next
+            case case_2_case_5
+            by contradiction /* from formulas */
+          next
+            case case_2_case_6
+            by contradiction /* from formulas */
+          next
+            case case_2_case_7
+            by contradiction /* from formulas */
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_3
+          solve( (∃ #k. (BlindingFactor( (~a++b) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.1 b.1 #k.
+                   (BlindingFactor( b.1 ) @ #k) ∧ ((~a++b) = (a.1++b.1))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_2
+            by contradiction /* from formulas */
+          next
+            case case_2_case_3
+            by contradiction /* from formulas */
+          next
+            case case_2_case_4
+            by contradiction /* from formulas */
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        qed
+      next
+        case remove
+        solve( (∃ #k. (BlindingFactor( f ) @ #k) ∧ ¬(last(#k)))  ∥
+               (∃ a b #k.
+                 (BlindingFactor( b ) @ #k) ∧ (f = (a++b)) ∧ ¬(last(#k)))  ∥
+               (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2
+          by contradiction /* from formulas */
+        next
+          case case_3
+          by contradiction /* from formulas */
+        qed
+      qed
+    next
+      case mul_coerce
+      solve( !MulD( mul(f, h(x)) ) ▶₀ #i )
+        case mul_down
+        solve( !KU( mul(f, h(x)) ) @ #vk )
+          case c_mul
+          solve( !KU( h(x) ) @ #vk.2 )
+            case c_h
+            by contradiction /* from formulas */
+          next
+            case extract_case_1
+            solve( (∃ #k. (BlindingFactor( a ) @ #k) ∧ ¬(last(#k)))  ∥
+                   (∃ a.1 b #k.
+                     (BlindingFactor( b ) @ #k) ∧ (a = (b++a.1)) ∧ ¬(last(#k)))  ∥
+                   (∃ #k. (!KU( ~x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.1)) )
+              case case_1
+              solve( !KU( ~b.1 ) @ #vk.3 )
+                case bruteforce
+                solve( !KU( h(~b.1) ) @ #vk.5 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_2
+              solve( !KU( ~b.1 ) @ #vk.6 )
+                case bruteforce
+                solve( !KU( h(~b.1) ) @ #vk.7 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_3
+              by contradiction /* from formulas */
+            qed
+          next
+            case extract_case_2
+            solve( (∃ #k. (BlindingFactor( a ) @ #k) ∧ ¬(last(#k)))  ∥
+                   (∃ a.1 b #k.
+                     (BlindingFactor( b ) @ #k) ∧ (a = (b++a.1)) ∧ ¬(last(#k)))  ∥
+                   (∃ #k. (!KU( ~x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.1)) )
+              case case_1
+              solve( !KU( ~b.1 ) @ #vk.3 )
+                case bruteforce
+                solve( !KU( h(~b.1) ) @ #vk.5 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_2
+              solve( !KU( ~b.1 ) @ #vk.6 )
+                case bruteforce
+                solve( !KU( h(~b.1) ) @ #vk.7 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_3
+              by contradiction /* from formulas */
+            qed
+          qed
+        next
+          case evaluate_client_case_1
+          by contradiction /* from formulas */
+        next
+          case evaluate_client_case_2
+          by contradiction /* from formulas */
+        next
+          case evaluate_client_case_3
+          by contradiction /* from formulas */
+        next
+          case evaluate_server
+          solve( (∃ #k.
+                   (BlindingFactor( (factors++koprfi) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((factors++koprfi) = (a++b))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.1)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_2
+            by contradiction /* from formulas */
+          next
+            case case_2_case_3
+            by contradiction /* from formulas */
+          next
+            case case_2_case_4
+            by contradiction /* from formulas */
+          next
+            case case_2_case_5
+            by contradiction /* from formulas */
+          next
+            case case_2_case_6
+            by contradiction /* from formulas */
+          next
+            case case_2_case_7
+            by contradiction /* from formulas */
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_1
+          solve( (∃ #k. (BlindingFactor( f ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a b #k.
+                   (BlindingFactor( b ) @ #k) ∧ (f = (a++b)) ∧ ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2
+            by contradiction /* from formulas */
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_2
+          solve( (∃ #k. (BlindingFactor( (a++b) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.1 b.1 #k.
+                   (BlindingFactor( b.1 ) @ #k) ∧ ((a++b) = (a.1++b.1))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_2
+            by contradiction /* from formulas */
+          next
+            case case_2_case_3
+            by contradiction /* from formulas */
+          next
+            case case_2_case_4
+            by contradiction /* from formulas */
+          next
+            case case_2_case_5
+            by contradiction /* from formulas */
+          next
+            case case_2_case_6
+            by contradiction /* from formulas */
+          next
+            case case_2_case_7
+            by contradiction /* from formulas */
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_3
+          solve( (∃ #k. (BlindingFactor( (~a++b) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.1 b.1 #k.
+                   (BlindingFactor( b.1 ) @ #k) ∧ ((~a++b) = (a.1++b.1))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_2
+            by contradiction /* from formulas */
+          next
+            case case_2_case_3
+            by contradiction /* from formulas */
+          next
+            case case_2_case_4
+            by contradiction /* from formulas */
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        qed
+      next
+        case remove
+        solve( (∃ #k. (BlindingFactor( f ) @ #k) ∧ ¬(last(#k)))  ∥
+               (∃ a b #k.
+                 (BlindingFactor( b ) @ #k) ∧ (f = (a++b)) ∧ ¬(last(#k)))  ∥
+               (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr)) )
+          case case_1
+          by contradiction /* from formulas */
+        next
+          case case_2
+          by contradiction /* from formulas */
+        next
+          case case_3
+          by contradiction /* from formulas */
+        qed
+      qed
+    next
+      case remove
+      solve( !MulD( mul((a++f), h(x)) ) ▶₁ #i )
+        case mul_down
+        solve( !KU( mul((a++f), h(x)) ) @ #vk.1 )
+          case c_mul
+          solve( !KU( h(x) ) @ #vk.3 )
+            case c_h
+            by contradiction /* from formulas */
+          next
+            case extract_case_1
+            solve( (∃ #k. (BlindingFactor( a.1 ) @ #k) ∧ ¬(last(#k)))  ∥
+                   (∃ a.2 b #k.
+                     (BlindingFactor( b ) @ #k) ∧ (a.1 = (b++a.2)) ∧ ¬(last(#k)))  ∥
+                   (∃ #k. (!KU( ~x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.1)) )
+              case case_1
+              solve( !KU( ~b.1 ) @ #vk.5 )
+                case bruteforce
+                solve( !KU( h(~b.1) ) @ #vk.7 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_2
+              solve( !KU( ~b.1 ) @ #vk.8 )
+                case bruteforce
+                solve( !KU( h(~b.1) ) @ #vk.9 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_3
+              by contradiction /* from formulas */
+            qed
+          next
+            case extract_case_2
+            solve( (∃ #k. (BlindingFactor( a.1 ) @ #k) ∧ ¬(last(#k)))  ∥
+                   (∃ a.2 b #k.
+                     (BlindingFactor( b ) @ #k) ∧ (a.1 = (b++a.2)) ∧ ¬(last(#k)))  ∥
+                   (∃ #k. (!KU( ~x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.1)) )
+              case case_1
+              solve( !KU( ~b.1 ) @ #vk.5 )
+                case bruteforce
+                solve( !KU( h(~b.1) ) @ #vk.7 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_2
+              solve( !KU( ~b.1 ) @ #vk.8 )
+                case bruteforce
+                solve( !KU( h(~b.1) ) @ #vk.9 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_3
+              by contradiction /* from formulas */
+            qed
+          qed
+        next
+          case evaluate_server_case_1
+          solve( (∃ #k. (BlindingFactor( (a++f) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.1 b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((a++f) = (b++a.1)) ∧ ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.1)) )
+            case case_1
+            by solve( BlindingFactor( (a++f) ) @ #k )
+          next
+            case case_2_case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_2
+            solve( !KU( ~b ) @ #vk.1 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.10 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_3
+            by solve( BlindingFactor( (a++x) ) @ #k )
+          next
+            case case_2_case_4
+            by contradiction /* from formulas */
+          next
+            case case_2_case_5
+            by solve( BlindingFactor( (f++x) ) @ #k )
+          next
+            case case_2_case_6
+            solve( !KU( ~b ) @ #vk.10 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.12 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_7
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case evaluate_server_case_2
+          solve( (∃ #k.
+                   (BlindingFactor( (a++koprfi++x) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.1 b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((a++koprfi++x) = (b++a.1))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x.1 ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.1)) )
+            case case_1
+            by solve( BlindingFactor( (a++koprfi++x) ) @ #k )
+          next
+            case case_2_case_01
+            by contradiction /* from formulas */
+          next
+            case case_2_case_02
+            by solve( BlindingFactor( (a++x) ) @ #k )
+          next
+            case case_2_case_03
+            by solve( BlindingFactor( (a++koprfi) ) @ #k )
+          next
+            case case_2_case_04
+            by contradiction /* from formulas */
+          next
+            case case_2_case_05
+            by contradiction /* from formulas */
+          next
+            case case_2_case_06
+            solve( !KU( ~b ) @ #vk.1 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.10 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_07
+            by solve( BlindingFactor( (a++koprfi++x) ) @ #k )
+          next
+            case case_2_case_08
+            by contradiction /* from formulas */
+          next
+            case case_2_case_09
+            by contradiction /* from formulas */
+          next
+            case case_2_case_10
+            by solve( BlindingFactor( (a++x.1) ) @ #k )
+          next
+            case case_2_case_11
+            by solve( BlindingFactor( (a++x++x.1) ) @ #k )
+          next
+            case case_2_case_12
+            by contradiction /* from formulas */
+          next
+            case case_2_case_13
+            by contradiction /* from formulas */
+          next
+            case case_2_case_14
+            by solve( BlindingFactor( (a++x.2) ) @ #k )
+          next
+            case case_2_case_15
+            by contradiction /* from formulas */
+          next
+            case case_2_case_16
+            by solve( BlindingFactor( (a++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_17
+            by solve( BlindingFactor( (koprfi++x++x.1) ) @ #k )
+          next
+            case case_2_case_18
+            by solve( BlindingFactor( (x.1++x.2) ) @ #k )
+          next
+            case case_2_case_19
+            by solve( BlindingFactor( (koprfi++x.1) ) @ #k )
+          next
+            case case_2_case_20
+            solve( !KU( ~b ) @ #vk.10 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.12 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_21
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_2_case_22
+            by solve( BlindingFactor( (koprfi++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_23
+            by solve( BlindingFactor( (x.1++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_24
+            by solve( BlindingFactor( (x.1++x.4) ) @ #k )
+          next
+            case case_2_case_25
+            by solve( BlindingFactor( (x.1++x.3++x.5) ) @ #k )
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case evaluate_server_case_3
+          solve( (∃ #k. (BlindingFactor( (a++f) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.1 b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((a++f) = (b++a.1)) ∧ ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.1)) )
+            case case_1
+            by solve( BlindingFactor( (a++f) ) @ #k )
+          next
+            case case_2_case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_2
+            solve( !KU( ~b ) @ #vk.1 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.9 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_3
+            by solve( BlindingFactor( (a++x) ) @ #k )
+          next
+            case case_2_case_4
+            by contradiction /* from formulas */
+          next
+            case case_2_case_5
+            by solve( BlindingFactor( (f++x) ) @ #k )
+          next
+            case case_2_case_6
+            solve( !KU( ~b ) @ #vk.9 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.11 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_7
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case evaluate_server_case_4
+          solve( (∃ #k.
+                   (BlindingFactor( (a++factors++x) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.1 b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((a++factors++x) = (b++a.1))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x.1 ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.1)) )
+            case case_1
+            by solve( BlindingFactor( (a++factors++x) ) @ #k )
+          next
+            case case_2_case_01
+            by contradiction /* from formulas */
+          next
+            case case_2_case_02
+            by solve( BlindingFactor( (a++x) ) @ #k )
+          next
+            case case_2_case_03
+            by solve( BlindingFactor( (a++factors) ) @ #k )
+          next
+            case case_2_case_04
+            by contradiction /* from formulas */
+          next
+            case case_2_case_05
+            by contradiction /* from formulas */
+          next
+            case case_2_case_06
+            solve( !KU( ~b ) @ #vk.1 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.11 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_07
+            by solve( BlindingFactor( (a++factors++x) ) @ #k )
+          next
+            case case_2_case_08
+            by contradiction /* from formulas */
+          next
+            case case_2_case_09
+            by contradiction /* from formulas */
+          next
+            case case_2_case_10
+            by solve( BlindingFactor( (a++x.1) ) @ #k )
+          next
+            case case_2_case_11
+            by solve( BlindingFactor( (a++x++x.1) ) @ #k )
+          next
+            case case_2_case_12
+            by contradiction /* from formulas */
+          next
+            case case_2_case_13
+            by contradiction /* from formulas */
+          next
+            case case_2_case_14
+            by solve( BlindingFactor( (a++x.2) ) @ #k )
+          next
+            case case_2_case_15
+            by contradiction /* from formulas */
+          next
+            case case_2_case_16
+            by solve( BlindingFactor( (a++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_17
+            by solve( BlindingFactor( (factors++x++x.1) ) @ #k )
+          next
+            case case_2_case_18
+            by solve( BlindingFactor( (x.1++x.2) ) @ #k )
+          next
+            case case_2_case_19
+            by solve( BlindingFactor( (factors++x.1) ) @ #k )
+          next
+            case case_2_case_20
+            solve( !KU( ~b ) @ #vk.11 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.13 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_21
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_2_case_22
+            by solve( BlindingFactor( (factors++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_23
+            by solve( BlindingFactor( (x.1++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_24
+            by solve( BlindingFactor( (x.1++x.4) ) @ #k )
+          next
+            case case_2_case_25
+            by solve( BlindingFactor( (x.1++x.3++x.5) ) @ #k )
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case evaluate_server_case_5
+          solve( (∃ #k.
+                   (BlindingFactor( (f++factors++x) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((f++factors++x) = (a++b))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x.1 ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.1)) )
+            case case_1
+            by solve( BlindingFactor( (f++factors++x) ) @ #k )
+          next
+            case case_2_case_01
+            by solve( BlindingFactor( (factors++x) ) @ #k )
+          next
+            case case_2_case_02
+            by solve( BlindingFactor( (f++x) ) @ #k )
+          next
+            case case_2_case_03
+            by solve( BlindingFactor( (f++factors) ) @ #k )
+          next
+            case case_2_case_04
+            solve( !KU( ~b ) @ #vk.11 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.13 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_05
+            solve( !KU( ~b ) @ #vk.12 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.13 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_06
+            by contradiction /* from formulas */
+          next
+            case case_2_case_07
+            by solve( BlindingFactor( (f++factors++x) ) @ #k )
+          next
+            case case_2_case_08
+            solve( !KU( ~b ) @ #vk.13 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.15 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_09
+            by solve( BlindingFactor( (factors++x.1) ) @ #k )
+          next
+            case case_2_case_10
+            by solve( BlindingFactor( (f++x.1) ) @ #k )
+          next
+            case case_2_case_11
+            by solve( BlindingFactor( (f++x++x.1) ) @ #k )
+          next
+            case case_2_case_12
+            by solve( BlindingFactor( (x++x.2) ) @ #k )
+          next
+            case case_2_case_13
+            solve( !KU( ~b ) @ #vk.13 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.15 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_14
+            by solve( BlindingFactor( (f++x.2) ) @ #k )
+          next
+            case case_2_case_15
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_2_case_16
+            by solve( BlindingFactor( (f++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_17
+            by solve( BlindingFactor( (factors++x++x.1) ) @ #k )
+          next
+            case case_2_case_18
+            by solve( BlindingFactor( (x++x.2) ) @ #k )
+          next
+            case case_2_case_19
+            by solve( BlindingFactor( (factors++x.2) ) @ #k )
+          next
+            case case_2_case_20
+            by contradiction /* from formulas */
+          next
+            case case_2_case_21
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_2_case_22
+            by solve( BlindingFactor( (factors++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_23
+            by solve( BlindingFactor( (x++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_24
+            by solve( BlindingFactor( (x.2++x.4) ) @ #k )
+          next
+            case case_2_case_25
+            by solve( BlindingFactor( (x.1++x.3++x.5) ) @ #k )
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case evaluate_server_case_6
+          solve( (∃ #k.
+                   (BlindingFactor( (x++x.1++x.2++x.3) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((x++x.1++x.2++x.3) = (a++b))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x.4 ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.1)) )
+            case case_1
+            by solve( BlindingFactor( (x++x.1++x.2++x.3) ) @ #k )
+          next
+            case case_2_case_01
+            by solve( BlindingFactor( (x.1++x.2++x.3) ) @ #k )
+          next
+            case case_2_case_02
+            by solve( BlindingFactor( (x++x.2++x.3) ) @ #k )
+          next
+            case case_2_case_03
+            by solve( BlindingFactor( (x++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_04
+            by solve( BlindingFactor( (x++x.1++x.2) ) @ #k )
+          next
+            case case_2_case_05
+            by contradiction /* from formulas */
+          next
+            case case_2_case_06
+            by contradiction /* from formulas */
+          next
+            case case_2_case_07
+            by contradiction /* from formulas */
+          next
+            case case_2_case_08
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_2_case_09
+            solve( !KU( ~b ) @ #vk.10 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.13 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_10
+            by solve( BlindingFactor( (x.1++x.2) ) @ #k )
+          next
+            case case_2_case_11
+            by solve( BlindingFactor( (x++x.3) ) @ #k )
+          next
+            case case_2_case_12
+            solve( !KU( ~b ) @ #vk.12 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.13 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_13
+            by solve( BlindingFactor( (x++x.2) ) @ #k )
+          next
+            case case_2_case_14
+            by solve( BlindingFactor( (x++x.1) ) @ #k )
+          next
+            case case_2_case_15
+            by solve( BlindingFactor( (x++x.1++x.2++x.3) ) @ #k )
+          next
+            case case_2_case_16
+            by contradiction /* from formulas */
+          next
+            case case_2_case_17
+            by contradiction /* from formulas */
+          next
+            case case_2_case_18
+            by solve( BlindingFactor( (x.1++x.4) ) @ #k )
+          next
+            case case_2_case_19
+            by solve( BlindingFactor( (x.1++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_20
+            by solve( BlindingFactor( (x++x.4) ) @ #k )
+          next
+            case case_2_case_21
+            by solve( BlindingFactor( (x++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_22
+            by solve( BlindingFactor( (x++x.1++x.4) ) @ #k )
+          next
+            case case_2_case_23
+            by solve( BlindingFactor( (x++x.1++x.2++x.3) ) @ #k )
+          next
+            case case_2_case_24
+            by contradiction /* from formulas */
+          next
+            case case_2_case_25
+            by contradiction /* from formulas */
+          next
+            case case_2_case_26
+            by solve( BlindingFactor( (x.1++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_27
+            by solve( BlindingFactor( (x.1++x.4) ) @ #k )
+          next
+            case case_2_case_28
+            by solve( BlindingFactor( (x++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_29
+            by solve( BlindingFactor( (x++x.4) ) @ #k )
+          next
+            case case_2_case_30
+            by solve( BlindingFactor( (x++x.1++x.4) ) @ #k )
+          next
+            case case_2_case_31
+            by contradiction /* from formulas */
+          next
+            case case_2_case_32
+            by solve( BlindingFactor( (x.1++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_33
+            by solve( BlindingFactor( (x++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_34
+            by solve( BlindingFactor( (x++x.1++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_35
+            by solve( BlindingFactor( (x++x.1++x.2++x.3) ) @ #k )
+          next
+            case case_2_case_36
+            by solve( BlindingFactor( (x.2++x.3++x.4) ) @ #k )
+          next
+            case case_2_case_37
+            by solve( BlindingFactor( (x.2++x.4) ) @ #k )
+          next
+            case case_2_case_38
+            by solve( BlindingFactor( (x.2++x.3) ) @ #k )
+          next
+            case case_2_case_39
+            solve( !KU( ~b ) @ #vk.13 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.15 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_40
+            by solve( BlindingFactor( (x++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_41
+            by solve( BlindingFactor( (x++x.2) ) @ #k )
+          next
+            case case_2_case_42
+            by solve( BlindingFactor( (x++x.2++x.3) ) @ #k )
+          next
+            case case_2_case_43
+            by solve( BlindingFactor( (x.2++x.5) ) @ #k )
+          next
+            case case_2_case_44
+            by solve( BlindingFactor( (x.2++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_45
+            by solve( BlindingFactor( (x++x.2++x.5) ) @ #k )
+          next
+            case case_2_case_46
+            by solve( BlindingFactor( (x++x.2++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_47
+            by solve( BlindingFactor( (x.2++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_48
+            by solve( BlindingFactor( (x.2++x.5) ) @ #k )
+          next
+            case case_2_case_49
+            by solve( BlindingFactor( (x++x.2++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_50
+            by solve( BlindingFactor( (x++x.2++x.5) ) @ #k )
+          next
+            case case_2_case_51
+            by solve( BlindingFactor( (x.2++x.4++x.6) ) @ #k )
+          next
+            case case_2_case_52
+            by solve( BlindingFactor( (x++x.2++x.4++x.6) ) @ #k )
+          next
+            case case_2_case_53
+            by solve( BlindingFactor( (x++x.1++x.2++x.3) ) @ #k )
+          next
+            case case_2_case_54
+            by solve( BlindingFactor( (x.2++x.3++x.4) ) @ #k )
+          next
+            case case_2_case_55
+            by solve( BlindingFactor( (x.2++x.4) ) @ #k )
+          next
+            case case_2_case_56
+            by solve( BlindingFactor( (x.2++x.3) ) @ #k )
+          next
+            case case_2_case_57
+            by solve( BlindingFactor( (x++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_58
+            by solve( BlindingFactor( (x++x.2) ) @ #k )
+          next
+            case case_2_case_59
+            by solve( BlindingFactor( (x++x.2++x.3) ) @ #k )
+          next
+            case case_2_case_60
+            solve( !KU( ~b ) @ #vk.13 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.15 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_61
+            by solve( BlindingFactor( (x.2++x.5) ) @ #k )
+          next
+            case case_2_case_62
+            by solve( BlindingFactor( (x.2++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_63
+            by solve( BlindingFactor( (x++x.2++x.5) ) @ #k )
+          next
+            case case_2_case_64
+            by solve( BlindingFactor( (x++x.2++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_65
+            by solve( BlindingFactor( (x.2++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_66
+            by solve( BlindingFactor( (x.2++x.5) ) @ #k )
+          next
+            case case_2_case_67
+            by solve( BlindingFactor( (x++x.2++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_68
+            by solve( BlindingFactor( (x++x.2++x.5) ) @ #k )
+          next
+            case case_2_case_69
+            by solve( BlindingFactor( (x.2++x.4++x.6) ) @ #k )
+          next
+            case case_2_case_70
+            by solve( BlindingFactor( (x++x.2++x.4++x.6) ) @ #k )
+          next
+            case case_2_case_71
+            by solve( BlindingFactor( (x.1++x.3++x.4++x.5) ) @ #k )
+          next
+            case case_2_case_72
+            by solve( BlindingFactor( (x.1++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_73
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_2_case_74
+            by solve( BlindingFactor( (x.1++x.3++x.4) ) @ #k )
+          next
+            case case_2_case_75
+            by solve( BlindingFactor( (x.1++x.3++x.6) ) @ #k )
+          next
+            case case_2_case_76
+            by solve( BlindingFactor( (x.1++x.3++x.4++x.6) ) @ #k )
+          next
+            case case_2_case_77
+            by solve( BlindingFactor( (x.1++x.3++x.4++x.6) ) @ #k )
+          next
+            case case_2_case_78
+            by solve( BlindingFactor( (x.1++x.3++x.6) ) @ #k )
+          next
+            case case_2_case_79
+            by solve( BlindingFactor( (x.1++x.3++x.5++x.7) ) @ #k )
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case evaluate_server_case_7
+          solve( (∃ #k.
+                   (BlindingFactor( (f++koprfi++x) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((f++koprfi++x) = (a++b))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x.1 ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.1)) )
+            case case_1
+            by solve( BlindingFactor( (f++koprfi++x) ) @ #k )
+          next
+            case case_2_case_01
+            by solve( BlindingFactor( (koprfi++x) ) @ #k )
+          next
+            case case_2_case_02
+            by solve( BlindingFactor( (f++x) ) @ #k )
+          next
+            case case_2_case_03
+            by solve( BlindingFactor( (f++koprfi) ) @ #k )
+          next
+            case case_2_case_04
+            solve( !KU( ~b ) @ #vk.10 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.11 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_05
+            solve( !KU( ~b ) @ #vk.9 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.11 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_06
+            by contradiction /* from formulas */
+          next
+            case case_2_case_07
+            by solve( BlindingFactor( (f++koprfi++x) ) @ #k )
+          next
+            case case_2_case_08
+            solve( !KU( ~b ) @ #vk.11 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.13 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_09
+            by solve( BlindingFactor( (koprfi++x.1) ) @ #k )
+          next
+            case case_2_case_10
+            by solve( BlindingFactor( (f++x.1) ) @ #k )
+          next
+            case case_2_case_11
+            by solve( BlindingFactor( (f++x++x.1) ) @ #k )
+          next
+            case case_2_case_12
+            by solve( BlindingFactor( (x++x.2) ) @ #k )
+          next
+            case case_2_case_13
+            solve( !KU( ~b ) @ #vk.11 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.13 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_14
+            by solve( BlindingFactor( (f++x.2) ) @ #k )
+          next
+            case case_2_case_15
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_2_case_16
+            by solve( BlindingFactor( (f++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_17
+            by solve( BlindingFactor( (koprfi++x++x.1) ) @ #k )
+          next
+            case case_2_case_18
+            by solve( BlindingFactor( (x++x.2) ) @ #k )
+          next
+            case case_2_case_19
+            by solve( BlindingFactor( (koprfi++x.2) ) @ #k )
+          next
+            case case_2_case_20
+            by contradiction /* from formulas */
+          next
+            case case_2_case_21
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_2_case_22
+            by solve( BlindingFactor( (koprfi++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_23
+            by solve( BlindingFactor( (x++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_24
+            by solve( BlindingFactor( (x.2++x.4) ) @ #k )
+          next
+            case case_2_case_25
+            by solve( BlindingFactor( (x.1++x.3++x.5) ) @ #k )
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_01
+          solve( (∃ #k. (BlindingFactor( (a++f) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.1 b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((a++f) = (b++a.1)) ∧ ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            solve( (∃ #k. (BlindingFactor( (a++f) ) @ #k) ∧ ¬(last(#k)))  ∥
+                   (∃ a.1 b #k.
+                     (BlindingFactor( b ) @ #k) ∧ ((a++f) = (b++a.1)) ∧ ¬(last(#k)))  ∥
+                   (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.3)) )
+              case case_1
+              by solve( BlindingFactor( (a++f) ) @ #k )
+            next
+              case case_2_case_1
+              by contradiction /* from formulas */
+            next
+              case case_2_case_2
+              solve( !KU( ~b ) @ #vk.1 )
+                case bruteforce
+                solve( !KU( h(~b) ) @ #vk.3 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_2_case_3
+              by solve( BlindingFactor( (a++x++a.1) ) @ #k )
+            next
+              case case_2_case_4
+              by contradiction /* from formulas */
+            next
+              case case_2_case_5
+              by solve( BlindingFactor( (a++f++x) ) @ #k )
+            next
+              case case_2_case_6
+              solve( !KU( ~b ) @ #vk.3 )
+                case bruteforce
+                solve( !KU( h(~b) ) @ #vk.5 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            next
+              case case_2_case_7
+              by solve( BlindingFactor( (x++x.1++x.2++x.3) ) @ #k )
+            next
+              case case_3
+              by contradiction /* from formulas */
+            qed
+          next
+            case case_2_case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_2
+            solve( !KU( ~b ) @ #vk.1 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.3 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_3
+            solve( (∃ #k.
+                     (BlindingFactor( (a++x++a.1) ) @ #k) ∧ ¬(last(#k)))  ∥
+                   (∃ a.2 b #k.
+                     (BlindingFactor( b ) @ #k) ∧ ((a++x++a.1) = (b++a.2))
+                    ∧
+                     ¬(last(#k)))  ∥
+                   (∃ #k. (!KU( x.1 ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.3)) )
+              case case_1
+              by solve( BlindingFactor( (a++x) ) @ #k )
+            next
+              case case_2
+              by solve( BlindingFactor( (a++x) ) @ #k )
+            next
+              case case_3
+              by contradiction /* from formulas */
+            qed
+          next
+            case case_2_case_4
+            by contradiction /* from formulas */
+          next
+            case case_2_case_5
+            solve( (∃ #k. (BlindingFactor( (a++f++x) ) @ #k) ∧ ¬(last(#k)))  ∥
+                   (∃ a.1 b #k.
+                     (BlindingFactor( b ) @ #k) ∧ ((a++f++x) = (b++a.1))
+                    ∧
+                     ¬(last(#k)))  ∥
+                   (∃ #k. (!KU( x.1 ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.3)) )
+              case case_1
+              by solve( BlindingFactor( (f++x) ) @ #k )
+            next
+              case case_2
+              by solve( BlindingFactor( (f++x) ) @ #k )
+            next
+              case case_3
+              by contradiction /* from formulas */
+            qed
+          next
+            case case_2_case_6
+            solve( !KU( ~b ) @ #vk.3 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.5 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_7
+            solve( (∃ #k.
+                     (BlindingFactor( (x++x.1++x.2++x.3) ) @ #k) ∧ ¬(last(#k)))  ∥
+                   (∃ a b #k.
+                     (BlindingFactor( b ) @ #k) ∧ ((x++x.1++x.2++x.3) = (a++b))
+                    ∧
+                     ¬(last(#k)))  ∥
+                   (∃ #k. (!KU( x.4 ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.3)) )
+              case case_1
+              by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+            next
+              case case_2
+              by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+            next
+              case case_3
+              by contradiction /* from formulas */
+            qed
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_02
+          solve( (∃ #k. (BlindingFactor( (a++f) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.1 b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((a++f) = (b++a.1)) ∧ ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by solve( BlindingFactor( (a++f) ) @ #k )
+          next
+            case case_2_case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_2
+            solve( !KU( ~b ) @ #vk.1 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.2 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_3
+            by solve( BlindingFactor( (a++x) ) @ #k )
+          next
+            case case_2_case_4
+            by contradiction /* from formulas */
+          next
+            case case_2_case_5
+            by solve( BlindingFactor( (f++x) ) @ #k )
+          next
+            case case_2_case_6
+            solve( !KU( ~b ) @ #vk.2 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.4 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_7
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_03
+          solve( (∃ #k. (BlindingFactor( (a++b++x) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.1 b.1 #k.
+                   (BlindingFactor( b.1 ) @ #k) ∧ ((a++b++x) = (a.1++b.1))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x.1 ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by solve( BlindingFactor( (a++b++x) ) @ #k )
+          next
+            case case_2_case_01
+            by contradiction /* from formulas */
+          next
+            case case_2_case_02
+            by solve( BlindingFactor( (a++x) ) @ #k )
+          next
+            case case_2_case_03
+            by solve( BlindingFactor( (a++b) ) @ #k )
+          next
+            case case_2_case_04
+            by contradiction /* from formulas */
+          next
+            case case_2_case_05
+            by contradiction /* from formulas */
+          next
+            case case_2_case_06
+            solve( !KU( ~b ) @ #vk.1 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.2 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_07
+            by solve( BlindingFactor( (a++b++x) ) @ #k )
+          next
+            case case_2_case_08
+            by contradiction /* from formulas */
+          next
+            case case_2_case_09
+            by contradiction /* from formulas */
+          next
+            case case_2_case_10
+            by solve( BlindingFactor( (a++x.1) ) @ #k )
+          next
+            case case_2_case_11
+            by solve( BlindingFactor( (a++x++x.1) ) @ #k )
+          next
+            case case_2_case_12
+            by contradiction /* from formulas */
+          next
+            case case_2_case_13
+            by contradiction /* from formulas */
+          next
+            case case_2_case_14
+            by solve( BlindingFactor( (a++x.2) ) @ #k )
+          next
+            case case_2_case_15
+            by contradiction /* from formulas */
+          next
+            case case_2_case_16
+            by solve( BlindingFactor( (a++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_17
+            by solve( BlindingFactor( (b++x++x.1) ) @ #k )
+          next
+            case case_2_case_18
+            by solve( BlindingFactor( (x.1++x.2) ) @ #k )
+          next
+            case case_2_case_19
+            by solve( BlindingFactor( (b++x.1) ) @ #k )
+          next
+            case case_2_case_20
+            solve( !KU( ~b ) @ #vk.2 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.4 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_21
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_2_case_22
+            by solve( BlindingFactor( (b++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_23
+            by solve( BlindingFactor( (x.1++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_24
+            by solve( BlindingFactor( (x.1++x.4) ) @ #k )
+          next
+            case case_2_case_25
+            by solve( BlindingFactor( (x.1++x.3++x.5) ) @ #k )
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_04
+          solve( (∃ #k. (BlindingFactor( (a++f) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.1 b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((a++f) = (b++a.1)) ∧ ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by solve( BlindingFactor( (a++f) ) @ #k )
+          next
+            case case_2_case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_2
+            solve( !KU( ~b ) @ #vk.1 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.2 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_3
+            by solve( BlindingFactor( (a++x) ) @ #k )
+          next
+            case case_2_case_4
+            by contradiction /* from formulas */
+          next
+            case case_2_case_5
+            by solve( BlindingFactor( (f++x) ) @ #k )
+          next
+            case case_2_case_6
+            solve( !KU( ~b ) @ #vk.2 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.4 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_7
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_05
+          solve( (∃ #k.
+                   (BlindingFactor( (a++x++a.1) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.2 b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((a++x++a.1) = (b++a.2))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x.1 ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by solve( BlindingFactor( (a++x++a.1) ) @ #k )
+          next
+            case case_2_case_01
+            by contradiction /* from formulas */
+          next
+            case case_2_case_02
+            by solve( BlindingFactor( (a++a.1) ) @ #k )
+          next
+            case case_2_case_03
+            by solve( BlindingFactor( (a++x) ) @ #k )
+          next
+            case case_2_case_04
+            by contradiction /* from formulas */
+          next
+            case case_2_case_05
+            by contradiction /* from formulas */
+          next
+            case case_2_case_06
+            solve( !KU( ~b ) @ #vk.1 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.2 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_07
+            by solve( BlindingFactor( (a++x++x.1) ) @ #k )
+          next
+            case case_2_case_08
+            by contradiction /* from formulas */
+          next
+            case case_2_case_09
+            by contradiction /* from formulas */
+          next
+            case case_2_case_10
+            by solve( BlindingFactor( (a++x.2) ) @ #k )
+          next
+            case case_2_case_11
+            by solve( BlindingFactor( (a++x++a.1) ) @ #k )
+          next
+            case case_2_case_12
+            by contradiction /* from formulas */
+          next
+            case case_2_case_13
+            by contradiction /* from formulas */
+          next
+            case case_2_case_14
+            by solve( BlindingFactor( (a++x.1) ) @ #k )
+          next
+            case case_2_case_15
+            by contradiction /* from formulas */
+          next
+            case case_2_case_16
+            by solve( BlindingFactor( (a++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_17
+            by solve( BlindingFactor( (x++a.1++x.1) ) @ #k )
+          next
+            case case_2_case_18
+            by solve( BlindingFactor( (a++x.1) ) @ #k )
+          next
+            case case_2_case_19
+            by solve( BlindingFactor( (x.1++x.2) ) @ #k )
+          next
+            case case_2_case_20
+            solve( !KU( ~b ) @ #vk.2 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.4 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_21
+            by solve( BlindingFactor( (x.1++x.4) ) @ #k )
+          next
+            case case_2_case_22
+            by solve( BlindingFactor( (x.1++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_23
+            by solve( BlindingFactor( (a++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_24
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_2_case_25
+            by solve( BlindingFactor( (x.1++x.3++x.5) ) @ #k )
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_06
+          solve( (∃ #k. (BlindingFactor( (a++f++x) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.1 b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((a++f++x) = (b++a.1))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x.1 ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by solve( BlindingFactor( (a++f++x) ) @ #k )
+          next
+            case case_2_case_01
+            by solve( BlindingFactor( (f++x) ) @ #k )
+          next
+            case case_2_case_02
+            by solve( BlindingFactor( (a++x) ) @ #k )
+          next
+            case case_2_case_03
+            by solve( BlindingFactor( (a++f) ) @ #k )
+          next
+            case case_2_case_04
+            solve( !KU( ~b ) @ #vk.3 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.4 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_05
+            by contradiction /* from formulas */
+          next
+            case case_2_case_06
+            solve( !KU( ~b ) @ #vk.2 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.4 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_07
+            by solve( BlindingFactor( (a++f++x) ) @ #k )
+          next
+            case case_2_case_08
+            solve( !KU( ~b ) @ #vk.4 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.6 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_09
+            by solve( BlindingFactor( (f++x.1) ) @ #k )
+          next
+            case case_2_case_10
+            by solve( BlindingFactor( (a++x.1) ) @ #k )
+          next
+            case case_2_case_11
+            by solve( BlindingFactor( (a++x++x.1) ) @ #k )
+          next
+            case case_2_case_12
+            by solve( BlindingFactor( (x++x.2) ) @ #k )
+          next
+            case case_2_case_13
+            by contradiction /* from formulas */
+          next
+            case case_2_case_14
+            by solve( BlindingFactor( (a++x.2) ) @ #k )
+          next
+            case case_2_case_15
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_2_case_16
+            by solve( BlindingFactor( (a++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_17
+            by solve( BlindingFactor( (f++x++x.1) ) @ #k )
+          next
+            case case_2_case_18
+            by solve( BlindingFactor( (x++x.2) ) @ #k )
+          next
+            case case_2_case_19
+            by solve( BlindingFactor( (f++x.2) ) @ #k )
+          next
+            case case_2_case_20
+            solve( !KU( ~b ) @ #vk.4 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.6 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_21
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_2_case_22
+            by solve( BlindingFactor( (f++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_23
+            by solve( BlindingFactor( (x++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_24
+            by solve( BlindingFactor( (x.2++x.4) ) @ #k )
+          next
+            case case_2_case_25
+            by solve( BlindingFactor( (x.1++x.3++x.5) ) @ #k )
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_07
+          solve( (∃ #k.
+                   (BlindingFactor( (x++x.1++x.2++x.3) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((x++x.1++x.2++x.3) = (a++b))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x.4 ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by solve( BlindingFactor( (x++x.1++x.2++x.3) ) @ #k )
+          next
+            case case_2_case_01
+            by solve( BlindingFactor( (x.1++x.2++x.3) ) @ #k )
+          next
+            case case_2_case_02
+            by solve( BlindingFactor( (x++x.2++x.3) ) @ #k )
+          next
+            case case_2_case_03
+            by solve( BlindingFactor( (x++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_04
+            by solve( BlindingFactor( (x++x.1++x.2) ) @ #k )
+          next
+            case case_2_case_05
+            by contradiction /* from formulas */
+          next
+            case case_2_case_06
+            by contradiction /* from formulas */
+          next
+            case case_2_case_07
+            by contradiction /* from formulas */
+          next
+            case case_2_case_08
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_2_case_09
+            solve( !KU( ~b ) @ #vk.3 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.4 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_10
+            by solve( BlindingFactor( (x.1++x.2) ) @ #k )
+          next
+            case case_2_case_11
+            by solve( BlindingFactor( (x++x.3) ) @ #k )
+          next
+            case case_2_case_12
+            solve( !KU( ~b ) @ #vk.2 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.4 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_13
+            by solve( BlindingFactor( (x++x.2) ) @ #k )
+          next
+            case case_2_case_14
+            by solve( BlindingFactor( (x++x.1) ) @ #k )
+          next
+            case case_2_case_15
+            by solve( BlindingFactor( (x++x.1++x.2++x.3) ) @ #k )
+          next
+            case case_2_case_16
+            by contradiction /* from formulas */
+          next
+            case case_2_case_17
+            by contradiction /* from formulas */
+          next
+            case case_2_case_18
+            by solve( BlindingFactor( (x.1++x.4) ) @ #k )
+          next
+            case case_2_case_19
+            by solve( BlindingFactor( (x.1++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_20
+            by solve( BlindingFactor( (x++x.4) ) @ #k )
+          next
+            case case_2_case_21
+            by solve( BlindingFactor( (x++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_22
+            by solve( BlindingFactor( (x++x.1++x.4) ) @ #k )
+          next
+            case case_2_case_23
+            by solve( BlindingFactor( (x++x.1++x.2++x.3) ) @ #k )
+          next
+            case case_2_case_24
+            by contradiction /* from formulas */
+          next
+            case case_2_case_25
+            by contradiction /* from formulas */
+          next
+            case case_2_case_26
+            by solve( BlindingFactor( (x.1++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_27
+            by solve( BlindingFactor( (x.1++x.4) ) @ #k )
+          next
+            case case_2_case_28
+            by solve( BlindingFactor( (x++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_29
+            by solve( BlindingFactor( (x++x.4) ) @ #k )
+          next
+            case case_2_case_30
+            by solve( BlindingFactor( (x++x.1++x.4) ) @ #k )
+          next
+            case case_2_case_31
+            by contradiction /* from formulas */
+          next
+            case case_2_case_32
+            by solve( BlindingFactor( (x.1++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_33
+            by solve( BlindingFactor( (x++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_34
+            by solve( BlindingFactor( (x++x.1++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_35
+            by solve( BlindingFactor( (x++x.1++x.2++x.3) ) @ #k )
+          next
+            case case_2_case_36
+            by solve( BlindingFactor( (x.2++x.3++x.4) ) @ #k )
+          next
+            case case_2_case_37
+            by solve( BlindingFactor( (x.2++x.4) ) @ #k )
+          next
+            case case_2_case_38
+            by solve( BlindingFactor( (x.2++x.3) ) @ #k )
+          next
+            case case_2_case_39
+            solve( !KU( ~b ) @ #vk.4 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.6 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_40
+            by solve( BlindingFactor( (x++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_41
+            by solve( BlindingFactor( (x++x.2) ) @ #k )
+          next
+            case case_2_case_42
+            by solve( BlindingFactor( (x++x.2++x.3) ) @ #k )
+          next
+            case case_2_case_43
+            by solve( BlindingFactor( (x.2++x.5) ) @ #k )
+          next
+            case case_2_case_44
+            by solve( BlindingFactor( (x.2++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_45
+            by solve( BlindingFactor( (x++x.2++x.5) ) @ #k )
+          next
+            case case_2_case_46
+            by solve( BlindingFactor( (x++x.2++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_47
+            by solve( BlindingFactor( (x.2++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_48
+            by solve( BlindingFactor( (x.2++x.5) ) @ #k )
+          next
+            case case_2_case_49
+            by solve( BlindingFactor( (x++x.2++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_50
+            by solve( BlindingFactor( (x++x.2++x.5) ) @ #k )
+          next
+            case case_2_case_51
+            by solve( BlindingFactor( (x.2++x.4++x.6) ) @ #k )
+          next
+            case case_2_case_52
+            by solve( BlindingFactor( (x++x.2++x.4++x.6) ) @ #k )
+          next
+            case case_2_case_53
+            by solve( BlindingFactor( (x++x.1++x.2++x.3) ) @ #k )
+          next
+            case case_2_case_54
+            by solve( BlindingFactor( (x.2++x.3++x.4) ) @ #k )
+          next
+            case case_2_case_55
+            by solve( BlindingFactor( (x.2++x.4) ) @ #k )
+          next
+            case case_2_case_56
+            by solve( BlindingFactor( (x.2++x.3) ) @ #k )
+          next
+            case case_2_case_57
+            by solve( BlindingFactor( (x++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_58
+            by solve( BlindingFactor( (x++x.2) ) @ #k )
+          next
+            case case_2_case_59
+            by solve( BlindingFactor( (x++x.2++x.3) ) @ #k )
+          next
+            case case_2_case_60
+            solve( !KU( ~b ) @ #vk.4 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.6 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_61
+            by solve( BlindingFactor( (x.2++x.5) ) @ #k )
+          next
+            case case_2_case_62
+            by solve( BlindingFactor( (x.2++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_63
+            by solve( BlindingFactor( (x++x.2++x.5) ) @ #k )
+          next
+            case case_2_case_64
+            by solve( BlindingFactor( (x++x.2++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_65
+            by solve( BlindingFactor( (x.2++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_66
+            by solve( BlindingFactor( (x.2++x.5) ) @ #k )
+          next
+            case case_2_case_67
+            by solve( BlindingFactor( (x++x.2++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_68
+            by solve( BlindingFactor( (x++x.2++x.5) ) @ #k )
+          next
+            case case_2_case_69
+            by solve( BlindingFactor( (x.2++x.4++x.6) ) @ #k )
+          next
+            case case_2_case_70
+            by solve( BlindingFactor( (x++x.2++x.4++x.6) ) @ #k )
+          next
+            case case_2_case_71
+            by solve( BlindingFactor( (x.1++x.3++x.4++x.5) ) @ #k )
+          next
+            case case_2_case_72
+            by solve( BlindingFactor( (x.1++x.3++x.5) ) @ #k )
+          next
+            case case_2_case_73
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_2_case_74
+            by solve( BlindingFactor( (x.1++x.3++x.4) ) @ #k )
+          next
+            case case_2_case_75
+            by solve( BlindingFactor( (x.1++x.3++x.6) ) @ #k )
+          next
+            case case_2_case_76
+            by solve( BlindingFactor( (x.1++x.3++x.4++x.6) ) @ #k )
+          next
+            case case_2_case_77
+            by solve( BlindingFactor( (x.1++x.3++x.4++x.6) ) @ #k )
+          next
+            case case_2_case_78
+            by solve( BlindingFactor( (x.1++x.3++x.6) ) @ #k )
+          next
+            case case_2_case_79
+            by solve( BlindingFactor( (x.1++x.3++x.5++x.7) ) @ #k )
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_08
+          solve( (∃ #k. (BlindingFactor( (b++f++x) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a b.1 #k.
+                   (BlindingFactor( b.1 ) @ #k) ∧ ((b++f++x) = (a++b.1))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x.1 ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by solve( BlindingFactor( (b++f++x) ) @ #k )
+          next
+            case case_2_case_01
+            by solve( BlindingFactor( (f++x) ) @ #k )
+          next
+            case case_2_case_02
+            by solve( BlindingFactor( (b++x) ) @ #k )
+          next
+            case case_2_case_03
+            by solve( BlindingFactor( (b++f) ) @ #k )
+          next
+            case case_2_case_04
+            solve( !KU( ~b.1 ) @ #vk.3 )
+              case bruteforce
+              solve( !KU( h(~b.1) ) @ #vk.4 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_05
+            by contradiction /* from formulas */
+          next
+            case case_2_case_06
+            solve( !KU( ~b ) @ #vk.2 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.4 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_07
+            by solve( BlindingFactor( (b++f++x) ) @ #k )
+          next
+            case case_2_case_08
+            solve( !KU( ~b.1 ) @ #vk.4 )
+              case bruteforce
+              solve( !KU( h(~b.1) ) @ #vk.6 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_09
+            by solve( BlindingFactor( (f++x.1) ) @ #k )
+          next
+            case case_2_case_10
+            by solve( BlindingFactor( (b++x.1) ) @ #k )
+          next
+            case case_2_case_11
+            by solve( BlindingFactor( (b++x++x.1) ) @ #k )
+          next
+            case case_2_case_12
+            by solve( BlindingFactor( (x++x.2) ) @ #k )
+          next
+            case case_2_case_13
+            by contradiction /* from formulas */
+          next
+            case case_2_case_14
+            by solve( BlindingFactor( (b++x.2) ) @ #k )
+          next
+            case case_2_case_15
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_2_case_16
+            by solve( BlindingFactor( (b++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_17
+            by solve( BlindingFactor( (f++x++x.1) ) @ #k )
+          next
+            case case_2_case_18
+            by solve( BlindingFactor( (x++x.2) ) @ #k )
+          next
+            case case_2_case_19
+            by solve( BlindingFactor( (f++x.2) ) @ #k )
+          next
+            case case_2_case_20
+            solve( !KU( ~b ) @ #vk.4 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.6 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_21
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_2_case_22
+            by solve( BlindingFactor( (f++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_23
+            by solve( BlindingFactor( (x++x.2++x.4) ) @ #k )
+          next
+            case case_2_case_24
+            by solve( BlindingFactor( (x.2++x.4) ) @ #k )
+          next
+            case case_2_case_25
+            by solve( BlindingFactor( (x.1++x.3++x.5) ) @ #k )
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_09
+          solve( (∃ #k. (BlindingFactor( (~f++a) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.1 b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((~f++a) = (b++a.1)) ∧ ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by solve( BlindingFactor( (~f++a) ) @ #k )
+          next
+            case case_2_case_1
+            by contradiction /* from formulas */
+          next
+            case case_2_case_2
+            solve( !KU( ~b ) @ #vk.1 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.3 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_3
+            by solve( BlindingFactor( (~f++x) ) @ #k )
+          next
+            case case_2_case_4
+            solve( !KU( ~b ) @ #vk.3 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.5 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_10
+          solve( (∃ #k.
+                   (BlindingFactor( (a++x++~a.1) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.2 b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((a++x++~a.1) = (b++a.2))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x.1 ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by solve( BlindingFactor( (a++x++~a.1) ) @ #k )
+          next
+            case case_2_case_01
+            by contradiction /* from formulas */
+          next
+            case case_2_case_02
+            by solve( BlindingFactor( (a++~a.1) ) @ #k )
+          next
+            case case_2_case_03
+            by solve( BlindingFactor( (a++x) ) @ #k )
+          next
+            case case_2_case_04
+            by contradiction /* from formulas */
+          next
+            case case_2_case_05
+            by contradiction /* from formulas */
+          next
+            case case_2_case_06
+            solve( !KU( ~b ) @ #vk.1 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.3 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_07
+            by solve( BlindingFactor( (a++x++~a.1) ) @ #k )
+          next
+            case case_2_case_08
+            by contradiction /* from formulas */
+          next
+            case case_2_case_09
+            by contradiction /* from formulas */
+          next
+            case case_2_case_10
+            by solve( BlindingFactor( (a++x.1) ) @ #k )
+          next
+            case case_2_case_11
+            by solve( BlindingFactor( (x++~a.1++x.1) ) @ #k )
+          next
+            case case_2_case_12
+            by solve( BlindingFactor( (~a++x.1) ) @ #k )
+          next
+            case case_2_case_13
+            by solve( BlindingFactor( (x.1++x.2) ) @ #k )
+          next
+            case case_2_case_14
+            solve( !KU( ~b ) @ #vk.3 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.5 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_15
+            by solve( BlindingFactor( (~a++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_16
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_11
+          solve( (∃ #k. (BlindingFactor( (~a++f) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.1 b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((~a++f) = (b++a.1)) ∧ ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by solve( BlindingFactor( (~a++f) ) @ #k )
+          next
+            case case_2_case_1
+            solve( !ClientInit( $C, $S1, $S2, $S3, ~x.1 ) ▶₀ #k )
+              case init_client
+              solve( !KU( ~a ) @ #vk.1 )
+                case bruteforce
+                solve( !KU( h(~a) ) @ #vk.2 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            qed
+          next
+            case case_2_case_2
+            by contradiction /* from formulas */
+          next
+            case case_2_case_3
+            by solve( BlindingFactor( (~a++x) ) @ #k )
+          next
+            case case_2_case_4
+            by contradiction /* from formulas */
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        next
+          case mul_up_case_12
+          solve( (∃ #k. (BlindingFactor( (~a++f++x) ) @ #k) ∧ ¬(last(#k)))  ∥
+                 (∃ a.1 b #k.
+                   (BlindingFactor( b ) @ #k) ∧ ((~a++f++x) = (b++a.1))
+                  ∧
+                   ¬(last(#k)))  ∥
+                 (∃ #k. (!KU( x.1 ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr.2)) )
+            case case_1
+            by solve( BlindingFactor( (~a++f++x) ) @ #k )
+          next
+            case case_2_case_01
+            by solve( BlindingFactor( (~a++x) ) @ #k )
+          next
+            case case_2_case_02
+            by solve( BlindingFactor( (~a++f) ) @ #k )
+          next
+            case case_2_case_03
+            by solve( BlindingFactor( (f++x) ) @ #k )
+          next
+            case case_2_case_04
+            solve( !ClientInit( $C, $S1, $S2, $S3, ~x.2 ) ▶₀ #k )
+              case init_client
+              solve( !KU( ~a ) @ #vk.2 )
+                case bruteforce
+                solve( !KU( h(~a) ) @ #vk.4 )
+                  case c_h
+                  by contradiction /* cyclic */
+                qed
+              qed
+            qed
+          next
+            case case_2_case_05
+            solve( !KU( ~b ) @ #vk.3 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.4 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_06
+            by contradiction /* from formulas */
+          next
+            case case_2_case_07
+            by solve( BlindingFactor( (~a++f++x) ) @ #k )
+          next
+            case case_2_case_08
+            by solve( BlindingFactor( (~a++x.1) ) @ #k )
+          next
+            case case_2_case_09
+            solve( !KU( ~b ) @ #vk.4 )
+              case bruteforce
+              solve( !KU( h(~b) ) @ #vk.6 )
+                case c_h
+                by contradiction /* cyclic */
+              qed
+            qed
+          next
+            case case_2_case_10
+            by solve( BlindingFactor( (f++x.1) ) @ #k )
+          next
+            case case_2_case_11
+            by solve( BlindingFactor( (~a++x++x.1) ) @ #k )
+          next
+            case case_2_case_12
+            by solve( BlindingFactor( (~a++x.2) ) @ #k )
+          next
+            case case_2_case_13
+            by solve( BlindingFactor( (x++x.2) ) @ #k )
+          next
+            case case_2_case_14
+            by contradiction /* from formulas */
+          next
+            case case_2_case_15
+            by solve( BlindingFactor( (~a++x.1++x.3) ) @ #k )
+          next
+            case case_2_case_16
+            by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+          next
+            case case_3
+            by contradiction /* from formulas */
+          qed
+        qed
+      next
+        case remove
+        solve( (∃ #k. (BlindingFactor( (a++f) ) @ #k) ∧ ¬(last(#k)))  ∥
+               (∃ a.1 b #k.
+                 (BlindingFactor( b ) @ #k) ∧ ((a++f) = (b++a.1)) ∧ ¬(last(#k)))  ∥
+               (∃ #k. (!KU( x ) @ #k) ∧ (¬(last(#k))) ∧ (#k < #vr)) )
+          case case_1
+          by solve( BlindingFactor( (a++f) ) @ #k )
+        next
+          case case_2_case_1
+          by contradiction /* from formulas */
+        next
+          case case_2_case_2
+          solve( !KU( ~b ) @ #vk )
+            case bruteforce
+            solve( !KU( h(~b) ) @ #vk.2 )
+              case c_h
+              by contradiction /* cyclic */
+            qed
+          qed
+        next
+          case case_2_case_3
+          by solve( BlindingFactor( (a++x) ) @ #k )
+        next
+          case case_2_case_4
+          by contradiction /* from formulas */
+        next
+          case case_2_case_5
+          by solve( BlindingFactor( (f++x) ) @ #k )
+        next
+          case case_2_case_6
+          solve( !KU( ~b ) @ #vk.2 )
+            case bruteforce
+            solve( !KU( h(~b) ) @ #vk.4 )
+              case c_h
+              by contradiction /* cyclic */
+            qed
+          qed
+        next
+          case case_2_case_7
+          by solve( BlindingFactor( (x.1++x.3) ) @ #k )
+        next
+          case case_3
+          by contradiction /* from formulas */
+        qed
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  next
+    case case_3
+    by contradiction /* from formulas */
+  next
+    case case_4
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma input_secrecy [heuristic={input_secrecy}]:
+  all-traces
+  "∀ C S1 S2 S3 x y #i.
+    (ClientInitialise( C, S1, S2, S3, x, y ) @ #i) ⇒
+    (¬(∃ #j. !KU( x ) @ #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ C S1 S2 S3 x y #i.
+  (ClientInitialise( C, S1, S2, S3, x, y ) @ #i)
+ ∧
+  ∃ #j. (!KU( x ) @ #j)"
+*/
+simplify
+solve( !KU( ~x ) @ #j )
+  case bruteforce
+  solve( !KU( h(~x) ) @ #vk )
+    case c_h
+    by contradiction /* cyclic */
+  next
+    case extract_case_1
+    solve( (∃ #k. (BlindingFactor( a ) @ #k))  ∥
+           (∃ a.1 b #k. (BlindingFactor( b ) @ #k) ∧ (a = (b++a.1)))  ∥
+           (∃ #k. (!KU( ~x ) @ #k) ∧ #k < #vr.1) )
+      case case_1
+      solve( !KU( ~b.1 ) @ #vk.1 )
+        case bruteforce
+        solve( !KU( h(~b) ) @ #vk.3 )
+          case c_h
+          by contradiction /* cyclic */
+        qed
+      qed
+    next
+      case case_2
+      solve( !KU( ~b.1 ) @ #vk.4 )
+        case bruteforce
+        solve( !KU( h(~b) ) @ #vk.5 )
+          case c_h
+          by contradiction /* cyclic */
+        qed
+      qed
+    next
+      case case_3
+      by contradiction /* cyclic */
+    qed
+  next
+    case extract_case_2
+    solve( (∃ #k. (BlindingFactor( a ) @ #k))  ∥
+           (∃ a.1 b #k. (BlindingFactor( b ) @ #k) ∧ (a = (b++a.1)))  ∥
+           (∃ #k. (!KU( ~x ) @ #k) ∧ #k < #vr.1) )
+      case case_1
+      solve( !KU( ~b.1 ) @ #vk.1 )
+        case bruteforce
+        solve( !KU( h(~b) ) @ #vk.3 )
+          case c_h
+          by contradiction /* cyclic */
+        qed
+      qed
+    next
+      case case_2
+      solve( !KU( ~b.1 ) @ #vk.4 )
+        case bruteforce
+        solve( !KU( h(~b) ) @ #vk.5 )
+          case c_h
+          by contradiction /* cyclic */
+        qed
+      qed
+    next
+      case case_3
+      by contradiction /* cyclic */
+    qed
+  qed
+qed
+
+
+
+
+
+
+
+
+
+
+
+/* All wellformedness checks were successful. */
+
+/*
+Generated from:
+Tamarin version 1.11.0
+Maude version 3.5
+Git revision: cf8d5afaa6950a5ec1e3765b7acd00574876e4ec, branch: fresh-variants
+Compiled at: 2025-09-29 11:28:39.576058098 UTC
+*/
+
+end

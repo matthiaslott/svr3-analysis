@@ -1,0 +1,241 @@
+theory TOPRF
+
+begin
+
+builtins: hashing, multiset
+
+tactic: sources
+prio:
+  regex "SourceP"
+prio:
+  regex "!MulU\(" | regex "!KU\( mul\("
+
+tactic: mul_invariant
+prio:
+  regex "!KU\( ~b" | regex "!KU\( h\(~b"
+prio:
+  regex "BlindingFactor"
+prio:
+  regex "!MulU\( mul\(b, h\(x\)\)"
+
+tactic: input_secrecy
+prio:
+  regex "!KU\( ~b" | regex "!KU\( h\(~b"
+
+
+
+predicates:
+    DISTINCT(x, y, z) <=> not (x = y | x = z | y = z)
+
+
+// Multiplication
+
+functions:
+    mul/2 // scalar multiplication
+
+rule mul_down[no_derivcheck, color=#d66f7c]:
+    [ In(mul(f, x)) ]-->[ !MulD(mul(f, x)) ]
+
+rule mul_coerce[no_derivcheck, color=#d66f7c]: // similar to coerce rule (KD -> KU)
+    [ !MulD(mul(f, x)) ]--[ KMul(mul(f, x)) ]->[ !MulU(mul(f, x)) ]
+
+rule mul_up[no_derivcheck, color=#d66f7c]:
+    [ !MulU(mul(f, x)) ]-->[ Out(mul(f, x)) ]
+
+// Construction Rules
+rule combine[no_derivcheck, color=#d66f7c]: // [a]x, [b]x -> [a+b]x
+    [ !MulU(mul(a, x)), !MulU(mul(b, x)) ]
+  --[ KMul(mul(a ++ b, x))
+    , SourcesPoint(x)
+    , AdversaryAction() ]->
+    [ !MulU(mul(a ++ b, x)) ]
+
+rule add[no_derivcheck, color=#d66f7c]: // a, [b]x -> [a*b]x
+    [ In(~a), !MulU(mul(b, x)) ]
+  --[ KMul(mul(~a ++ b, x))
+    , SourcesPoint(x)
+    , AdversaryAction() ]->
+    [ !MulU(mul(~a ++ b, x)) ]
+
+// Deconstruction Rules
+rule remove[no_derivcheck, color=#d66f7c]: // a, [a*b]x -> [b]x
+    [ In(a), !MulD(mul(a ++ b, x)) ]
+  --[ KMul(mul(b, x))
+    , SourcesPoint(x)
+    , AdversaryAction() ]->
+    [ !MulD(mul(b, x)) ]
+
+rule extract[no_derivcheck, color=#d66f7c]: // a, [a]x -> x
+    [ In(a), !MulD(mul(a, x)) ]
+  --[ KMul(mul(a, x))
+    , SourcesPoint(x)
+    , AdversaryAction() ]->
+    [ Out(x) ]
+
+
+// Bruteforce
+
+rule bruteforce[no_derivcheck]: // Simplification of brute-force attacks that works only on hashes
+    [ In(h(~x)) ]
+  --[ AdversaryAction() ]->
+    [ Out(~x) ] 
+
+
+// Server Compromise
+
+rule compromise:
+    [ !Initialised($C, $Si, koprfi) ]
+  --[ Compromised($Si)
+    , AdversaryAction() ]->
+    [ Out(koprfi) ]
+
+
+// TOPRF
+
+// Assumptions:
+// - Client remembers with which servers it initialised
+// - Use a slightly abnormal setup where the TOPRF input x is already known during initialisation (like in SVR3). 
+
+// Initialisation
+rule init_client:
+    let
+      y = h(~x, mul(~koprf1 ++ ~koprf2 ++ ~koprf3, h(~x)))
+    in
+    [ Fr(~x), Fr(~koprf1), Fr(~koprf2), Fr(~koprf3) ]
+  --[ _restrict(DISTINCT($S1, $S2, $S3))
+    , ClientInitialise($C, $S1, $S2, $S3, ~x, y) ]->
+    [ !ClientInit($C, $S1, $S2, $S3, ~x), Out(<$C, $S1, ~koprf1>), Out(<$C, $S2, ~koprf2>), Out(<$C, $S3, ~koprf3>) ]
+
+rule init_server:
+    [ In(<$C, $Si, koprfi>) ]
+  --[ ]->
+    [ !Initialised($C, $Si, koprfi) ] 
+
+
+// Evaluation
+rule evaluate_client:
+    let
+      blinded_hash = mul(~b, h(~x)) 
+    in
+    [ !ClientInit($C, $S1, $S2, $S3, ~x), Fr(~b) ]
+  --[ ClientEvaluate($C, $S1, $S2, $S3, ~x)
+    , SourceP(h(~x))
+    , BlindingFactor(~b) ]->
+    [ ClientEval($C, $S1, $S2, $S3, ~x, ~b), Out(<$C, $S1, blinded_hash>), Out(<$C, $S2, blinded_hash>), Out(<$C, $S3, blinded_hash>) ]
+
+rule evaluate_server[no_derivcheck]:
+    let
+      blinded_hash = mul(factors, hx)
+    in
+    [ In(<$C, $Si, blinded_hash>), !Initialised($C, $Si, koprfi) ]
+  --[ SourcesPoint(hx)
+    , KMul(mul(factors ++ koprfi, hx)) ]->
+    [ Out(<$C, $Si, mul(factors ++ koprfi, hx)>) ]
+  
+rule evaluate_finish[no_derivcheck]:
+    let
+      part1 = mul(~b ++ koprf1, hx) // Note: Also here, we make the assumption that the generators are the same!
+      part2 = mul(~b ++ koprf2, hx)
+      part3 = mul(~b ++ koprf3, hx)
+      y = h(~x, mul(koprf1 ++ koprf2 ++ koprf3, hx))
+    in
+    [ ClientEval($C, $S1, $S2, $S3, ~x, ~b), In(<$C, $S1, part1>), In(<$C, $S2, part2>), In(<$C, $S3, part3>) ]
+  --[ ClientFinish($C, $S1, $S2, $S3, ~x, y) ]->
+    [ ]
+
+
+lemma types[sources,heuristic={sources}]:
+    "(All p #i.
+      SourcesPoint(p)@#i
+      ==>
+      ( (Ex #j. SourceP(p)@#j & #j < #i)
+      | (Ex #j. !KU(p)@#j & #j < #i)
+      )
+    )"
+
+
+lemma executability:
+    exists-trace "
+      // adversary doesn't do anything
+      not (Ex #i. AdversaryAction()@#i)
+      &
+      ( Ex C S1 S2 S3 x y #i #j.
+          ( ClientInitialise(C, S1, S2, S3, x, y)@#i
+          & ClientFinish(C, S1, S2, S3, x, y)@#j
+        )
+      )
+    "
+
+lemma mul_invariant[reuse,use_induction,heuristic={mul_invariant}]:
+    "All f x #i. KMul(mul(f, h(x)))@#i // & (Ex #j. !HumanGenerated(pw)@#j) // If multiplication with a password hash on the right side, then
+      ==> (Ex #k. BlindingFactor(f)@#k) // f contains a secret factor
+      | (Ex a b #k. BlindingFactor(b)@#k & f = a ++ b) // f contains a secret factor
+      | (Ex #k. !KU(x)@#k & #k < #i)" // don't want to deal with the case where adversary knows the password already
+  
+lemma input_secrecy[heuristic={input_secrecy}]:
+    "All C S1 S2 S3 x y #i.
+      ClientInitialise(C, S1, S2, S3, x, y)@#i
+        ==> (not Ex #j. KU(x)@#j)
+    "
+/*
+lemma post_quantum_attack: // sanity check for adversary capabilities
+    exists-trace "
+      // client only registers once
+      (All cid pw1 pw2 kauth1 kauth2 #i #j.
+        ClientRegister(cid, pw1, kauth1)@#i & ClientRegister(cid, pw2, kauth2)@#j ==> #i = #j
+      ) &
+      // client only attempts reconstruction once
+      (All cid pw1 pw2 #i #j. ClientReconstruct(cid, pw1)@#i & ClientReconstruct(cid, pw2)@#j ==> #i = #j)
+      & 
+      // servers from registration are reused for recovery
+      (All id sid1 sid2 sid3 #i id2 sid4 sid5 sid6 #j.
+        InvolvedServers(id, sid1, sid2, sid3)@#i & InvolvedServers(id2, sid4, sid5, sid6)@#j
+          ==> id = id2 & sid1 = sid4 & sid2 = sid5 & sid3 = sid6
+      ) &
+      // attack
+      Ex id pw koprf kauth #i #j #k #l #m #n.
+          Secret(id, 'pw', pw)@#i & !KU(pw)@#j
+        & Secret(id, 'koprf', koprf)@#k & !KU(koprf)@#l
+        & Secret(id, 'kauth', kauth)@#m & !KU(kauth)@#n
+        & not (Ex sid1 sid2 sid3 #o #p #q #r.
+            InvolvedServers(id, sid1, sid2, sid3)@#o
+          & !Compromised(sid1)@#p & !Compromised(sid2)@#q & !Compromised(sid3)@#r
+          )
+    "
+
+// MAIN SECRECY GOAL
+// The only way the adversary can get rid of the blinding factor of the client is with a quantum computer
+lemma mul_invariant[reuse,use_induction,heuristic={mul_invariant}]:
+    "All f pw #i. KMul(mul(f, h(pw)))@#i & (Ex #j. !HumanGenerated(pw)@#j) // If multiplication with a password hash on the right side, then
+      ==> (Ex #k. BlindingFactor(f)@#k) // f contains a secret factor
+      | (Ex a b #k. BlindingFactor(b)@#k & f = a ++ b) // f contains a secret factor
+      | (Ex #k. PQAdversaryAction()@#k & #k < #i) // adversary used a QC to possibly find the secret factor
+      | (Ex #k. !KU(pw)@#k & #k < #i)" // don't want to deal with the case where adversary knows the password already
+
+lemma pw_pre_quantum_secrecy[reuse,heuristic={pw_pre_quantum_secrecy}]:
+    "All id pw #i. Secret(id, 'pw', pw)@#i
+      ==> (not Ex #j. !KU(pw)@#j)
+      | (Ex sid1 sid2 sid3 #j #k #l #m. InvolvedServers(id, sid1, sid2, sid3)@#j
+          & !Compromised(sid1)@#k & !Compromised(sid2)@#l & !Compromised(sid3)@#m
+        )
+      | (Ex #j #k. !KU(pw)@#j & PQAdversaryAction()@#k & #k < #j)"
+
+
+// LEMMAS FOR ADDITIONAL INVESTIGATION
+lemma koprf_pre_quantum_secrecy[heuristic={koprf_pre_quantum_secrecy},hide_lemma=mul_invariant,hide_lemma=pw_pre_quantum_secrecy]:
+    "All id koprf #i. Secret(id, 'koprf', koprf)@#i
+      ==> (not Ex #j. KU(koprf)@#j)
+      | (Ex sid1 sid2 sid3 #j #k #l #m. InvolvedServers(id, sid1, sid2, sid3)@#j
+          & !Compromised(sid1)@#k & !Compromised(sid2)@#l & !Compromised(sid3)@#m
+        )
+      | (Ex #j #k. KU(koprf)@#j & PQAdversaryAction()@#k & #k < #j)"
+
+lemma kauth_pre_quantum_secrecy[hide_lemma=mul_invariant]:
+    "All id kauth #i. Secret(id, 'kauth', kauth)@#i
+      ==> (not Ex #j. !KU(kauth)@#j)
+      | (Ex sid1 sid2 sid3 #j #k #l #m. InvolvedServers(id, sid1, sid2, sid3)@#j
+          & !Compromised(sid1)@#k & !Compromised(sid2)@#l & !Compromised(sid3)@#m
+        )
+      | (Ex #j #k. !KU(kauth)@#j & PQAdversaryAction()@#k & #k < #j)"
+*/
+end
