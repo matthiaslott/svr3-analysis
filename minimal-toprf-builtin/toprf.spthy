@@ -1,0 +1,105 @@
+theory TOPRF
+
+begin
+
+builtins: hashing, diffie-hellman
+
+predicates:
+    DISTINCT(x, y, z) <=> not (x = y | x = z | y = z)
+
+// Server Compromise
+
+rule compromise:
+    [ !Initialised($C, $Si, koprfi) ]
+  --[ Compromised($Si)
+    , AdversaryAction() ]->
+    [ Out(koprfi) ]
+
+
+// TOPRF
+
+// Assumptions:
+// - Client remembers with which servers it initialised
+// - Use a slightly abnormal setup where the TOPRF input x is already known during initialisation (like in SVR3). 
+
+// Initialisation
+rule init_client:
+    let
+      x = g^(e:FRNZE)
+      temp = x^(koprf1:FrNZE) * x^(koprf2:FrNZE) * x^(koprf3:FrNZE)
+      y = h(x, temp)
+    in
+    [ Fr(e:FrNZE), Fr(koprf1:FrNZE), Fr(koprf2:FrNZE), Fr(koprf3:FrNZE) ]
+  --[ _restrict(DISTINCT($S1, $S2, $S3))
+    , ClientInitialise($C, $S1, $S2, $S3, x, y) ]->
+    [ !ClientInit($C, $S1, $S2, $S3, x), Out(<$C, $S1, koprf1:FrNZE>), Out(<$C, $S2, koprf2:FrNZE>), Out(<$C, $S3, koprf3:FrNZE>) ]
+
+rule init_server:
+    // TODO: Consider not requiring a FRNZE koprfi here.
+    // - Problem 1: The adversary might actually send a zero exponent.
+    // - Problem 2: The adversary might actually send a composite exponent or one that is the inverse of another.
+    [ In(<$C, $Si, koprfi:FrNZE>) ]
+  --[ ]->
+    [ !Initialised($C, $Si, koprfi:FrNZE) ] 
+
+
+// Evaluation
+rule evaluate_client:
+    let
+      blinded_hash = x^(b:FRNZE)
+    in
+    [ !ClientInit($C, $S1, $S2, $S3, x), Fr(b:FRNZE) ]
+  --[ ClientEvaluate($C, $S1, $S2, $S3, x) ]->
+    [ ClientEval($C, $S1, $S2, $S3, x, b:FRNZE), Out(<$C, $S1, blinded_hash>), Out(<$C, $S2, blinded_hash>), Out(<$C, $S3, blinded_hash>) ]
+
+rule evaluate_server:
+    [ In(<$C, $Si, blinded_hash>), !Initialised($C, $Si, koprfi:FRNZE) ]
+  --[ ]->
+    [ Out(<$C, $Si, blinded_hash^(koprfi:FRNZE)>) ]
+  
+rule evaluate_finish:
+    let
+      temp = (part1 * part2 * part3)^inv(b:FRNZE)
+      y = h(x, temp)
+    in
+    [ ClientEval($C, $S1, $S2, $S3, x, b:FRNZE), In(<$C, $S1, part1>), In(<$C, $S2, part2>), In(<$C, $S3, part3>) ]
+  --[ ClientFinish($C, $S1, $S2, $S3, x, y) ]->
+    [ ]
+
+
+/*lemma types[sources,heuristic={sources}]:
+    "(All p #i.
+      SourcesPoint(p)@#i
+      ==>
+      ( (Ex #j. SourceP(p)@#j & #j < #i)
+      | (Ex #j. !KU(p)@#j & #j < #i)
+      )
+    )"*/
+
+
+lemma executability:
+    exists-trace "
+      // adversary doesn't do anything
+      not (Ex #i. AdversaryAction()@#i)
+      &
+      ( Ex C S1 S2 S3 x y #i #j.
+          ( ClientInitialise(C, S1, S2, S3, x, y)@#i
+          & ClientFinish(C, S1, S2, S3, x, y)@#j
+        )
+      )
+    "
+
+/*lemma mul_invariant[reuse,use_induction,heuristic={mul_invariant}]:
+    "All f x #i. KMul(mul(f, h(x)))@#i // & (Ex #j. !HumanGenerated(pw)@#j) // If multiplication with a password hash on the right side, then
+      ==> (Ex #k. BlindingFactor(f)@#k) // f contains a secret factor
+      | (Ex a b #k. BlindingFactor(b)@#k & f = a ++ b) // f contains a secret factor
+      | (Ex #k. !KU(x)@#k & #k < #i)" // don't want to deal with the case where adversary knows the password already*/
+  
+//lemma input_secrecy[heuristic={input_secrecy}]:
+lemma input_secrecy:
+    "All C S1 S2 S3 x y #i.
+      ClientInitialise(C, S1, S2, S3, x, y)@#i
+        ==> (not Ex #j. KU(x)@#j)
+    "
+
+end
