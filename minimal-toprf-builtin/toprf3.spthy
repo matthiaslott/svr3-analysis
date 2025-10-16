@@ -1,0 +1,92 @@
+theory TOPRF
+
+begin
+
+builtins: hashing, DH-multiplication
+
+predicates:
+    DISTINCT(x, y) <=> not (x = y)
+
+// Server Compromise
+
+rule compromise:
+    [ !Initialised($C, $Si, koprfi) ]
+  --[ Compromised($Si)
+    , AdversaryAction() ]->
+    [ Out(koprfi) ]
+
+
+// TOPRF
+
+// Assumptions:
+// - Client remembers with which servers it initialised
+// - Use a slightly abnormal setup where the TOPRF input x is already known during initialisation (like in SVR3). 
+
+// Initialisation
+rule init_client:
+    let
+      x = dhExp(P'g', Fe)
+      temp = dhExp(x, Fkoprf1)
+      y = h(<x, temp>)
+    in
+    [ FrDH(Fe), FrDH(Fkoprf1) ]
+  --[ ClientInitialise($C, $S1, x, y) ]->
+    [ !ClientInit($C, $S1, x), Out(<$C, $S1, Fkoprf1>) ]
+
+rule init_server:
+    // TODO: Consider not requiring a FRNZE koprfi here.
+    // - Problem 1: The adversary might actually send a zero exponent.
+    // - Problem 2: The adversary might actually send a composite exponent or one that is the inverse of another.
+    [ In(<$C, $Si, Fkoprfi>) ]
+  --[ ]->
+    [ !Initialised($C, $Si, Fkoprfi) ]
+
+
+// Evaluation
+rule evaluate_client:
+    let
+      blinded_hash = dhExp(Gx, Fb)
+    in
+    [ !ClientInit($C, $S1, Gx), FrDH(Fb) ]
+  --[ ClientEvaluate($C, $S1, Gx) ]->
+    [ ClientEval($C, $S1, Gx, Fb), Out(<$C, $S1, blinded_hash>) ]
+
+rule evaluate_server:
+    let
+      blinded_hash = dhExp(P'g', Ee)
+    in
+    [ In(<$C, $Si, blinded_hash>), !Initialised($C, $Si, Fkoprfi) ]
+  --[ ]->
+    [ Out(<$C, $Si, dhExp(blinded_hash, Fkoprfi)>) ]
+  
+rule evaluate_finish:
+    let
+      part1 = dhExp(P'g', Epart1)
+      temp = dhExp(part1, dhInv(Fb))
+      y = h(<Gx, temp>)
+    in
+    [ ClientEval($C, $S1, Gx, Fb), In(<$C, $S1, part1>) ]
+  --[ ClientFinish($C, $S1, Gx, y) ]->
+    [ ]
+
+
+lemma executability:
+    exists-trace "
+      // adversary doesn't do anything
+      not (Ex #i. AdversaryAction()@#i)
+      &
+      ( Ex C S1 Gx y #i #j.
+          ( ClientInitialise(C, S1, Gx, y)@#i
+          & ClientFinish(C, S1, Gx, y)@#j
+        )
+      )
+    "
+  
+//lemma input_secrecy[heuristic={input_secrecy}]:
+lemma input_secrecy:
+    "All C S1 Gx y #i.
+      ClientInitialise(C, S1, Gx, y)@#i
+        ==> (not Ex #j. KU(Gx)@#j)
+    "
+
+end

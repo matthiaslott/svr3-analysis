@@ -1,0 +1,54 @@
+theory TOPRF
+
+begin
+
+builtins: DH-multiplication
+
+// Initialisation
+rule init:
+    let
+      x = P'g' // Client doesn't select an input, just takes the generator
+      y = dhExp(x, Fkey)
+    in
+    [ FrDH(Fkey) ]
+  --[ ClientInitialise(x, y) ]->
+    [ ClientInit(x), Out(Fkey) // NOTE: Removing Out(Fkey) removes the error
+    // Client initialises Server directly (like with a secure channel)
+    , Initialised(Fkey) ]
+
+// Evaluation
+rule evaluate_client:
+    let
+      blinded_x = dhExp(Gx, Fb)
+    in
+    [ ClientInit(Gx), FrDH(Fb) ]
+  --[ ]->
+    [ ClientEval(Gx, Fb), Out(blinded_x) ]
+
+rule evaluate_server:
+    let
+      blinded_x = dhExp(P'g', Ee)
+    in
+    [ In(blinded_x), Initialised(Fkey) ]
+  --[ ]->
+    [ Out(dhExp(blinded_x, Fkey)) ]
+  
+rule evaluate_finish:
+    let
+      input = dhExp(P'g', Ee)
+      y = dhExp(input, dhInv(Fb))
+    in
+    [ ClientEval(Gx, Fb), In(input) ]
+  --[ ClientFinish(Gx, y) ]->
+    [ ]
+
+
+lemma executability:
+    exists-trace "
+      ( Ex Gx y #i #j.
+          ( ClientInitialise(Gx, y)@#i
+          & ClientFinish(Gx, y)@#j
+        )
+      )
+    "
+end

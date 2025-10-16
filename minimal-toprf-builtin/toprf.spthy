@@ -2,7 +2,7 @@ theory TOPRF
 
 begin
 
-builtins: hashing, diffie-hellman
+builtins: hashing, DH-multiplication
 
 predicates:
     DISTINCT(x, y, z) <=> not (x = y | x = z | y = z)
@@ -25,45 +25,51 @@ rule compromise:
 // Initialisation
 rule init_client:
     let
-      x = g^(e:FRNZE)
-      temp = x^(koprf1:FrNZE) * x^(koprf2:FrNZE) * x^(koprf3:FrNZE)
-      y = h(x, temp)
+      x = dhExp(P'g', Fe)
+      temp = dhExp(dhExp(dhExp(x, Fkoprf1), Fkoprf2), Fkoprf3)
+      y = h(<x, temp>)
     in
-    [ Fr(e:FrNZE), Fr(koprf1:FrNZE), Fr(koprf2:FrNZE), Fr(koprf3:FrNZE) ]
+    [ FrDH(Fe), FrDH(Fkoprf1), FrDH(Fkoprf2), FrDH(Fkoprf3) ]
   --[ _restrict(DISTINCT($S1, $S2, $S3))
     , ClientInitialise($C, $S1, $S2, $S3, x, y) ]->
-    [ !ClientInit($C, $S1, $S2, $S3, x), Out(<$C, $S1, koprf1:FrNZE>), Out(<$C, $S2, koprf2:FrNZE>), Out(<$C, $S3, koprf3:FrNZE>) ]
+    [ !ClientInit($C, $S1, $S2, $S3, x), Out(<$C, $S1, Fkoprf1>), Out(<$C, $S2, Fkoprf2>), Out(<$C, $S3, Fkoprf3>) ]
 
 rule init_server:
     // TODO: Consider not requiring a FRNZE koprfi here.
     // - Problem 1: The adversary might actually send a zero exponent.
     // - Problem 2: The adversary might actually send a composite exponent or one that is the inverse of another.
-    [ In(<$C, $Si, koprfi:FrNZE>) ]
+    [ In(<$C, $Si, Fkoprfi>) ]
   --[ ]->
-    [ !Initialised($C, $Si, koprfi:FrNZE) ] 
+    [ !Initialised($C, $Si, Fkoprfi) ]
 
 
 // Evaluation
 rule evaluate_client:
     let
-      blinded_hash = x^(b:FRNZE)
+      blinded_hash = dhExp(Gx, Fb)
     in
-    [ !ClientInit($C, $S1, $S2, $S3, x), Fr(b:FRNZE) ]
-  --[ ClientEvaluate($C, $S1, $S2, $S3, x) ]->
-    [ ClientEval($C, $S1, $S2, $S3, x, b:FRNZE), Out(<$C, $S1, blinded_hash>), Out(<$C, $S2, blinded_hash>), Out(<$C, $S3, blinded_hash>) ]
+    [ !ClientInit($C, $S1, $S2, $S3, Gx), FrDH(Fb) ]
+  --[ ClientEvaluate($C, $S1, $S2, $S3, Gx) ]->
+    [ ClientEval($C, $S1, $S2, $S3, Gx, Fb), Out(<$C, $S1, blinded_hash>), Out(<$C, $S2, blinded_hash>), Out(<$C, $S3, blinded_hash>) ]
 
 rule evaluate_server:
-    [ In(<$C, $Si, blinded_hash>), !Initialised($C, $Si, koprfi:FRNZE) ]
-  --[ ]->
-    [ Out(<$C, $Si, blinded_hash^(koprfi:FRNZE)>) ]
+    let
+      blinded_hash = dhExp(P'g', Ee)
+    in
+    [ In(<$C, $Si, blinded_hash>), !Initialised($C, $Si, Fkoprfi) ]
+  --[ ServerEval($C, $Si) ]->
+    [ Out(<$C, $Si, dhExp(blinded_hash, Fkoprfi)>) ]
   
 rule evaluate_finish:
     let
-      temp = (part1 * part2 * part3)^inv(b:FRNZE)
-      y = h(x, temp)
+      part1 = dhExp(P'g', Epart1)
+      part2 = dhExp(P'g', Epart2)
+      part3 = dhExp(P'g', Epart3)
+      temp = dhExp(dhMult(dhMult(part1, part2), part3), dhInv(Fb))
+      y = h(<Gx, temp>)
     in
-    [ ClientEval($C, $S1, $S2, $S3, x, b:FRNZE), In(<$C, $S1, part1>), In(<$C, $S2, part2>), In(<$C, $S3, part3>) ]
-  --[ ClientFinish($C, $S1, $S2, $S3, x, y) ]->
+    [ ClientEval($C, $S1, $S2, $S3, Gx, Fb), In(<$C, $S1, part1>), In(<$C, $S2, part2>), In(<$C, $S3, part3>) ]
+  --[ ClientFinish($C, $S1, $S2, $S3, Gx, y) ]->
     [ ]
 
 
@@ -82,9 +88,9 @@ lemma executability:
       // adversary doesn't do anything
       not (Ex #i. AdversaryAction()@#i)
       &
-      ( Ex C S1 S2 S3 x y #i #j.
-          ( ClientInitialise(C, S1, S2, S3, x, y)@#i
-          & ClientFinish(C, S1, S2, S3, x, y)@#j
+      ( Ex C S1 S2 S3 Gx y #i #j.
+          ( ClientInitialise(C, S1, S2, S3, Gx, y)@#i
+          & ClientFinish(C, S1, S2, S3, Gx, y)@#j
         )
       )
     "
@@ -97,9 +103,9 @@ lemma executability:
   
 //lemma input_secrecy[heuristic={input_secrecy}]:
 lemma input_secrecy:
-    "All C S1 S2 S3 x y #i.
-      ClientInitialise(C, S1, S2, S3, x, y)@#i
-        ==> (not Ex #j. KU(x)@#j)
+    "All C S1 S2 S3 Gx y #i.
+      ClientInitialise(C, S1, S2, S3, Gx, y)@#i
+        ==> (not Ex #j. KU(Gx)@#j)
     "
 
 end
