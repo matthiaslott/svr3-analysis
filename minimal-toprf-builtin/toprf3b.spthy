@@ -1,0 +1,71 @@
+theory TOPRF
+
+begin
+
+builtins: hashing, DH-multiplication
+
+// TOPRF
+
+// Assumptions:
+// - Client remembers with which servers it initialised
+// - Use a slightly abnormal setup where the TOPRF input x is already known during initialisation (like in SVR3). 
+
+// Initialisation
+rule init_client:
+    let
+      x = dhExp(P'g', Fe)
+      temp = dhExp(x, Fkoprf1)
+      y = h(temp)
+    in
+    [ FrDH(Fe), FrDH(Fkoprf1) ]
+  --[ ClientInitialise(x, y) ]->
+    // Note: Server is initialised without talking over the network
+    [ ClientInit(x), Initialised(Fkoprf1) ]
+
+
+// Evaluation
+rule evaluate_client:
+    let
+      blinded_hash = dhExp(Gx, Fb)
+    in
+    [ ClientInit(Gx), FrDH(Fb) ]
+  --[ ClientEvaluate(Gx) ]->
+    [ ClientEval(Gx, Fb), Out(blinded_hash) ]
+
+rule evaluate_server:
+    let
+      blinded_hash = dhExp(P'g', Ee)
+    in
+    [ In(blinded_hash), Initialised(Fkoprfi) ]
+  --[ ]->
+    [ Out(dhExp(blinded_hash, Fkoprfi)) ]
+  
+rule evaluate_finish:
+    let
+      part1 = dhExp(P'g', Epart1)
+      temp = dhExp(part1, dhInv(Fb))
+      y = h(temp)
+    in
+    [ ClientEval(Gx, Fb), In(part1) ]
+  --[ ClientFinish(Gx, y) ]->
+    [ ]
+
+
+lemma executability:
+    exists-trace "
+      // adversary doesn't do anything
+      ( Ex Gx y #i #j.
+          ( ClientInitialise(Gx, y)@#i
+          & ClientFinish(Gx, y)@#j
+        )
+      )
+    "
+  
+//lemma input_secrecy[heuristic={input_secrecy}]:
+lemma input_secrecy:
+    "All Gx y #i.
+      ClientInitialise(Gx, y)@#i
+        ==> (not Ex #j. KU(Gx)@#j)
+    "
+
+end
