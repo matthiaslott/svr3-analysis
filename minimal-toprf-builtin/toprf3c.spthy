@@ -40,8 +40,8 @@ rule evaluate_finish:
       temp = dhExp(part1, dhInv(Fb))
       y = temp
     in
-    [ ClientInit(Gx, Fb), In(part1) ]
-  --[ ClientFinish(Gx, y) ]->
+    [ ClientInit(P'g', Fb), In(part1) ]
+  --[ ClientFinish(P'g', y) ]->
     [ ]
 
 
