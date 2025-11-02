@@ -58,7 +58,7 @@ rule evaluate_server:
       blinded_hash = dhExp(P'g', Ee)
     in
     [ In(<$C, $Si, blinded_hash>), !Initialised($C, $Si, Fkoprfi) ]
-  --[ ]->
+  --[ ServerEval() ]->
     [ Out(<$C, $Si, dhExp(blinded_hash, Fkoprfi)>) ]
   
 rule evaluate_finish:
@@ -79,9 +79,17 @@ lemma executability:
       // adversary doesn't do anything
       not (Ex #i. AdversaryAction()@#i)
       &
-      ( Ex C S1 S2 Gx y #i #j.
+      // remove some case distinctions early
+      (All C1a S1a S2a Gxa ya C1b S1b S2b Gxb yb #i #j. ClientInitialise(C1a, S1a, S2a, Gxa, ya)@#i & ClientInitialise(C1b, S1b, S2b, Gxb, yb)@#j ==> #i = #j)
+      &
+      (All C1a S1a S2a Gxa C1b S1b S2b Gxb #i #j. ClientEvaluate(C1a, S1a, S2a, Gxa)@#i & ClientEvaluate(C1b, S1b, S2b, Gxb)@#j ==> #i = #j)
+      &
+      (All C1a S1a S2a Gxa ya C1b S1b S2b Gxb yb #i #j. ClientFinish(C1a, S1a, S2a, Gxa, ya)@#i & ClientFinish(C1b, S1b, S2b, Gxb, yb)@#j ==> #i = #j)
+      &
+      ( Ex C S1 S2 Gx y #i #j #k.
           ( ClientInitialise(C, S1, S2, Gx, y)@#i
-          & ClientFinish(C, S1, S2, Gx, y)@#j
+          & ClientEvaluate(C, S1, S2, Gx)@#j
+          & ClientFinish(C, S1, S2, Gx, y)@#k
         )
       )
     "

@@ -45,11 +45,12 @@ rule init_server:
 // Evaluation
 rule evaluate_client:
     let
-      blinded_hash = dhExp(Gx, Fb)
+      x = dhExp(P'g', Ee)
+      blinded_hash = dhExp(x, Fb)
     in
-    [ !ClientInit($C, $S1, Gx), FrDH(Fb) ]
-  --[ ClientEvaluate($C, $S1, Gx) ]->
-    [ ClientEval($C, $S1, Gx, Fb), Out(<$C, $S1, blinded_hash>) ]
+    [ !ClientInit($C, $S1, x), FrDH(Fb) ]
+  --[ ClientEvaluate($C, $S1, x) ]->
+    [ ClientEval($C, $S1, x, Fb), Out(<$C, $S1, blinded_hash>) ]
 
 rule evaluate_server:
     let
@@ -63,10 +64,11 @@ rule evaluate_finish:
     let
       part1 = dhExp(P'g', Epart1)
       temp = dhExp(part1, dhInv(Fb))
-      y = h(<Gx, temp>)
+      x = dhExp(P'g', Ee)
+      y = h(<x, temp>)
     in
-    [ ClientEval($C, $S1, Gx, Fb), In(<$C, $S1, part1>) ]
-  --[ ClientFinish($C, $S1, Gx, y) ]->
+    [ ClientEval($C, $S1, x, Fb), In(<$C, $S1, part1>) ]
+  --[ ClientFinish($C, $S1, x, y) ]->
     [ ]
 
 
