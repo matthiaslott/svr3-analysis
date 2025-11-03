@@ -1,0 +1,408 @@
+theory TOPRF begin
+
+// Function signature and definition of the equational theory E
+
+builtins: DH-multiplication
+functions: fst/1, h/1, pair/2, snd/1
+equations: fst(<x.1, x.2>) = x.1, snd(<x.1, x.2>) = x.2
+
+
+
+
+
+
+
+
+
+rule (modulo E) init_client:
+   [ FrDH( Fe ), FrDH( Fkoprf1 ), FrDH( Fkoprf2 ) ]
+  --[
+  ClientInitialise( dhExp(P'g', Fe),
+                    dhExp(dhExp(dhExp(P'g', Fe), Fkoprf1), Fkoprf2)
+  )
+  ]->
+   [
+   !ClientInit( dhExp(P'g', Fe) ), !Initialised( Fkoprf1 ),
+   !Initialised( Fkoprf2 )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) evaluate_client:
+   [ !ClientInit( dhExp(P'g', Ee) ), FrDH( Fb ) ]
+  --[ ClientEvaluate( dhExp(P'g', Ee), dhExp(dhExp(P'g', Ee), Fb) )
+  ]->
+   [
+   ClientEval( dhExp(P'g', Ee), Fb ),
+   Out( dhExp(dhExp(P'g', Ee), Fb) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) evaluate_server:
+   [ In( dhExp(P'g', Ee) ), !Initialised( Fkoprfi ) ]
+  --[ ServerEval( dhExp(P'g', Ee) ) ]->
+   [ Out( dhExp(dhExp(P'g', Ee), Fkoprfi) ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) evaluate_finish:
+   [
+   ClientEval( dhExp(P'g', Ee), Fb ), In( dhExp(P'g', Epart1) ),
+   In( dhExp(P'g', Epart2) )
+   ]
+  --[
+  ClientFinish( dhExp(P'g', Ee),
+                dhExp(dhMult(dhExp(P'g', Epart1), dhExp(P'g', Epart2)), dhInv(Fb))
+  )
+  ]->
+   [ ]
+
+  /* has exactly the trivial AC variant */
+
+lemma executability:
+  exists-trace
+  "((((∀ Gx1 Gy1 Gx2 Gy2 #i #j.
+        ((ClientInitialise( Gx1, Gy1 ) @ #i) ∧
+         (ClientInitialise( Gx2, Gy2 ) @ #j)) ⇒
+        (#i = #j)) ∧
+      (∀ Gx1 Gh1 Gx2 Gh2 #i #j.
+        ((ClientEvaluate( Gx1, Gh1 ) @ #i) ∧
+         (ClientEvaluate( Gx2, Gh2 ) @ #j)) ⇒
+        (#i = #j))) ∧
+     (∀ Gx1 Gy1 Gx2 Gy2 #i #j.
+       ((ClientFinish( Gx1, Gy1 ) @ #i) ∧
+        (ClientFinish( Gx2, Gy2 ) @ #j)) ⇒
+       (#i = #j))) ∧
+    (∀ Gh1 Gh2 Gx #i #j.
+      ((ServerEval( Gh1 ) @ #i) ∧ (ClientEvaluate( Gx, Gh2 ) @ #j)) ⇒
+      (Gh1 = Gh2))) ∧
+   (∃ Gx Gy Gh #i #j #k.
+     ((ClientInitialise( Gx, Gy ) @ #i) ∧
+      (ClientEvaluate( Gx, Gh ) @ #j)) ∧
+     (ClientFinish( Gx, Gy ) @ #k))"
+/*
+guarded formula characterizing all satisfying traces:
+"(∀ Gx1 Gy1 Gx2 Gy2 #i #j.
+   (ClientInitialise( Gx1, Gy1 ) @ #i) ∧
+   (ClientInitialise( Gx2, Gy2 ) @ #j)
+  ⇒
+   #i = #j) ∧
+ (∀ Gx1 Gh1 Gx2 Gh2 #i #j.
+   (ClientEvaluate( Gx1, Gh1 ) @ #i) ∧
+   (ClientEvaluate( Gx2, Gh2 ) @ #j)
+  ⇒
+   #i = #j) ∧
+ (∀ Gx1 Gy1 Gx2 Gy2 #i #j.
+   (ClientFinish( Gx1, Gy1 ) @ #i) ∧ (ClientFinish( Gx2, Gy2 ) @ #j)
+  ⇒
+   #i = #j) ∧
+ (∀ Gh1 Gh2 Gx #i #j.
+   (ServerEval( Gh1 ) @ #i) ∧ (ClientEvaluate( Gx, Gh2 ) @ #j)
+  ⇒
+   Gh1 = Gh2) ∧
+ (∃ Gx Gy Gh #i #j #k.
+   (ClientInitialise( Gx, Gy ) @ #i) ∧
+   (ClientEvaluate( Gx, Gh ) @ #j) ∧
+   (ClientFinish( Gx, Gy ) @ #k))"
+*/
+simplify
+solve( ClientInitialise( Gx, Gy ) @ #i )
+  case init_client
+  solve( ClientFinish( dhExp(P'g', Fe),
+                       dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf1, Fkoprf2)))
+         ) @ #k )
+    case evaluate_finish_case_1
+    solve( ClientEval( dhExp(P'g', Fe), Fb ) ▶₀ #k )
+      case evaluate_client
+      solve( !ClientInit( dhExp(P'g', Fe) ) ▶₀ #j )
+        case init_client
+        solve( ClientEvaluate( dhExp(P'g', Fe), Gh ) @ #j )
+          case evaluate_client
+          solve( !KU( dhMult(dhExp(P'g', Evy),
+                             dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf1, Fkoprf2))))
+                 ) @ #vk )
+            case coerce
+            solve( !KD( dhMult(dhExp(P'g', Evy),
+                               dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf1, Fkoprf2))))
+                   ) ▶₀ #vk )
+              case Using_OutFacts_case_01
+              by sorry
+            next
+              case Using_OutFacts_case_02
+              by sorry
+            next
+              case Using_OutFacts_case_03
+              by sorry
+            next
+              case Using_OutFacts_case_04
+              by sorry
+            next
+              case Using_OutFacts_case_05
+              by sorry
+            next
+              case Using_OutFacts_case_06
+              by sorry
+            next
+              case Using_OutFacts_case_07
+              by sorry
+            next
+              case Using_OutFacts_case_08
+              by sorry
+            next
+              case Using_OutFacts_case_09
+              by sorry
+            next
+              case Using_OutFacts_case_10
+              by sorry
+            next
+              case Using_OutFacts_case_11
+              by sorry
+            next
+              case Using_OutFacts_case_12
+              by sorry
+            next
+              case Using_OutFacts_case_13
+              by contradiction /* adversary derived secret element! */
+            next
+              case Using_OutFacts_case_14
+              by contradiction /* adversary derived secret element! */
+            next
+              case Using_OutFacts_case_15
+              by contradiction /* adversary derived secret element! */
+            next
+              case Using_OutFacts_case_16
+              by sorry
+            next
+              case Using_OutFacts_case_17
+              by sorry
+            next
+              case Using_OutFacts_case_18
+              by sorry
+            next
+              case Using_OutFacts_case_19
+              by contradiction /* adversary derived secret element! */
+            next
+              case Using_OutFacts_case_20
+              by contradiction /* adversary derived secret element! */
+            next
+              case Using_OutFacts_case_21
+              by contradiction /* adversary derived secret element! */
+            next
+              case Using_OutFacts_case_22
+              by sorry
+            next
+              case Using_OutFacts_case_23
+              by sorry
+            next
+              case Using_OutFacts_case_24
+              by sorry
+            next
+              case Using_OutFacts_case_25
+              by sorry
+            next
+              case Using_OutFacts_case_26
+              by sorry
+            next
+              case Using_OutFacts_case_27
+              by sorry
+            next
+              case Using_OutFacts_case_28
+              by sorry
+            next
+              case Using_OutFacts_case_29
+              by sorry
+            next
+              case Using_OutFacts_case_30
+              by sorry
+            next
+              case Using_OutFacts_case_31
+              by sorry
+            next
+              case Using_OutFacts_case_32
+              by sorry
+            next
+              case Using_OutFacts_case_33
+              by sorry
+            next
+              case Using_OutFacts_case_34
+              by sorry
+            next
+              case Using_OutFacts_case_35
+              by sorry
+            next
+              case Using_OutFacts_case_36
+              by sorry
+            next
+              case Using_OutFacts_case_37
+              by sorry
+            next
+              case Using_OutFacts_case_38
+              by sorry
+            next
+              case Using_OutFacts_case_39
+              by sorry
+            next
+              case Using_OutFacts_case_40
+              by sorry
+            next
+              case Using_OutFacts_case_41
+              by sorry
+            next
+              case Using_OutFacts_case_42
+              by sorry
+            next
+              case Using_OutFacts_case_43
+              by sorry
+            next
+              case Using_OutFacts_case_44
+              by sorry
+            next
+              case Using_OutFacts_case_45
+              by sorry
+            next
+              case Using_OutFacts_case_46
+              by sorry
+            next
+              case Using_OutFacts_case_47
+              by sorry
+            next
+              case Using_OutFacts_case_48
+              by sorry
+            next
+              case Using_OutFacts_case_49
+              by sorry
+            next
+              case Using_OutFacts_case_50
+              by sorry
+            next
+              case Using_OutFacts_case_51
+              by sorry
+            next
+              case Using_OutFacts_case_52
+              by sorry
+            next
+              case Using_OutFacts_case_53
+              by sorry
+            next
+              case Using_OutFacts_case_54
+              by sorry
+            next
+              case Using_OutFacts_case_55
+              by sorry
+            next
+              case Using_OutFacts_case_56
+              by sorry
+            next
+              case Using_OutFacts_case_57
+              by sorry
+            next
+              case Using_OutFacts_case_58
+              by sorry
+            next
+              case Using_OutFacts_case_59
+              by sorry
+            next
+              case Using_OutFacts_case_60
+              by sorry
+            next
+              case Using_OutFacts_case_61
+              by sorry
+            next
+              case Using_OutFacts_case_62
+              by sorry
+            next
+              case Using_OutFacts_case_63
+              by sorry
+            next
+              case Using_OutFacts_case_64
+              by sorry
+            next
+              case Using_OutFacts_case_65
+              by sorry
+            next
+              case Using_OutFacts_case_66
+              by sorry
+            next
+              case Using_OutFacts_case_67
+              by sorry
+            next
+              case Using_OutFacts_case_68
+              by sorry
+            next
+              case Using_OutFacts_case_69
+              by sorry
+            next
+              case Using_OutFacts_case_70
+              by sorry
+            next
+              case Using_OutFacts_case_71
+              by sorry
+            next
+              case Using_OutFacts_case_72
+              by sorry
+            qed
+          qed
+        qed
+      qed
+    qed
+  next
+    case evaluate_finish_case_2
+    by sorry
+  next
+    case evaluate_finish_case_3
+    by sorry
+  next
+    case evaluate_finish_case_4
+    by sorry
+  qed
+qed
+
+
+
+
+
+
+
+
+
+/*
+WARNING: the following wellformedness checks failed!
+
+Quantifier sorts
+================
+
+  lemma `executability' uses quantifiers with wrong sort:
+    ("x1",LSortG), ("y1",LSortG), ("x2",LSortG), ("y2",LSortG),
+    ("x1",LSortG), ("h1",LSortG), ("x2",LSortG), ("h2",LSortG),
+    ("x1",LSortG), ("y1",LSortG), ("x2",LSortG), ("y2",LSortG),
+    ("h1",LSortG), ("h2",LSortG), ("x",LSortG), ("x",LSortG),
+    ("y",LSortG), ("h",LSortG)
+
+Message Derivation Checks
+=========================
+
+  The variables of the follwing rule(s) are not derivable from their premises, you may be performing unintended pattern matching.
+
+Rule init_client: 
+Failed to derive Variable(s): Fe, Fkoprf1, Fkoprf2
+
+Rule evaluate_client: 
+Failed to derive Variable(s): Ee, Fb
+
+Rule evaluate_server: 
+Failed to derive Variable(s): Ee, Fkoprfi
+
+Rule evaluate_finish: 
+Failed to derive Variable(s): Ee, Epart1, Epart2, Fb
+*/
+
+/*
+Generated from:
+Tamarin version 1.9.0
+Maude version 3.3.1
+Git revision: 735c36eb3a4c9bfef2e724951b0a9dec86708434 (with uncommited changes), branch: dh-with-addition
+Compiled at: 2025-11-03 09:58:47.610198015 UTC
+*/
+
+end

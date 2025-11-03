@@ -1,0 +1,76 @@
+theory TOPRF
+
+begin
+
+builtins: hashing, DH-multiplication
+
+// Assumptions:
+// - Use a slightly abnormal setup where the TOPRF input x is already known during initialisation (like in SVR3). 
+
+// Initialisation
+rule init_client:
+    let
+      x = dhExp(P'g', Fe)
+      y = dhExp(dhExp(x, Fkoprf1), Fkoprf2)
+    in
+    [ FrDH(Fe), FrDH(Fkoprf1), FrDH(Fkoprf2) ]
+  --[ ClientInitialise(x, y) ]->
+    [ !ClientInit(x), Out(Fkoprf1), Out(Fkoprf2) ]
+
+rule init_server:
+    // TODO: Consider not requiring a FRNZE koprfi here.
+    // - Problem 1: The adversary might actually send a zero exponent.
+    // - Problem 2: The adversary might actually send a composite exponent or one that is the inverse of another.
+    [ In(Fkoprfi) ]
+  --[ ]->
+    [ !Initialised(Fkoprfi) ]
+
+
+// Evaluation
+rule evaluate_client:
+    let
+      x = dhExp(P'g', Ee)
+      blinded_hash = dhExp(x, Fb)
+    in
+    [ !ClientInit(x), FrDH(Fb) ]
+  --[ ClientEvaluate(x) ]->
+    [ ClientEval(x, Fb), Out(blinded_hash) ]
+
+rule evaluate_server:
+    let
+      blinded_hash = dhExp(P'g', Ee)
+    in
+    [ In(blinded_hash), !Initialised(Fkoprfi) ]
+  --[ ]->
+    [ Out(dhExp(blinded_hash, Fkoprfi)) ]
+  
+rule evaluate_finish:
+    let
+      part1 = dhExp(P'g', Epart1)
+      part2 = dhExp(P'g', Epart2)
+      y = dhExp(dhMult(part1, part2), dhInv(Fb))
+      x = dhExp(P'g', Ee)
+    in
+    [ ClientEval(x, Fb), In(part1), In(part2) ]
+  --[ ClientFinish(x, y) ]->
+    [ ]
+
+
+lemma executability:
+    exists-trace "
+      ( All Gx1 Gy1 Gx2 Gy2 #i #j. ClientInitialise(Gx1, Gy1)@#i & ClientInitialise(Gx2, Gy2)@#j ==> #i = #j)
+      &
+      ( All Gx1 Gx2 #i #j. ClientEvaluate(Gx1)@#i & ClientEvaluate(Gx2)@#j ==> #i = #j)
+      &
+      ( All Gx1 Gy1 Gx2 Gy2 #i #j. ClientFinish(Gx1, Gy1)@#i & ClientFinish(Gx2, Gy2)@#j ==> #i = #j)
+      &
+      // remove some case distinctions early
+      ( Ex Gx Gy #i #j #k.
+          ( ClientInitialise(Gx, Gy)@#i
+          & ClientEvaluate(Gx)@#j
+          & ClientFinish(Gx, Gy)@#k
+        )
+      )
+    "
+
+end

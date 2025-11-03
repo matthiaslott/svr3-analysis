@@ -14,74 +14,47 @@ equations: fst(<x.1, x.2>) = x.1, snd(<x.1, x.2>) = x.2
 
 
 
-predicate: DISTINCT( x, y )<=>¬(x = y)
-
-rule (modulo E) compromise:
-   [ !Initialised( $C, $Si, koprfi ) ]
-  --[ Compromised( $Si ), AdversaryAction( ) ]->
-   [ Out( koprfi ) ]
-
-  /* has exactly the trivial AC variant */
-
-restriction Restr_init_client_1:
-  "∀ x #NOW x.1.
-    (Restr_init_client_1( x, x.1 ) @ #NOW) ⇒ (¬(x = x.1))"
-  // safety formula
-
 rule (modulo E) init_client:
    [ FrDH( Fe ), FrDH( Fkoprf1 ), FrDH( Fkoprf2 ) ]
   --[
-  ClientInitialise( $C, $S1, $S2, dhExp(P'g', Fe),
-                    h(<dhExp(P'g', Fe), dhExp(dhExp(dhExp(P'g', Fe), Fkoprf1), Fkoprf2)
-                      >)
-  ),
-  Restr_init_client_1( $S1, $S2 )
+  ClientInitialise( dhExp(P'g', Fe),
+                    dhExp(dhExp(dhExp(P'g', Fe), Fkoprf1), Fkoprf2)
+  )
   ]->
-   [
-   !ClientInit( $C, $S1, $S2, dhExp(P'g', Fe) ),
-   Out( <$C, $S1, Fkoprf1> ), Out( <$C, $S2, Fkoprf2> )
-   ]
+   [ !ClientInit( dhExp(P'g', Fe) ), Out( Fkoprf1 ), Out( Fkoprf2 ) ]
 
   /* has exactly the trivial AC variant */
 
 rule (modulo E) init_server:
-   [ In( <$C, $Si, Fkoprfi> ) ]
-  -->
-   [ !Initialised( $C, $Si, Fkoprfi ) ]
+   [ In( Fkoprfi ) ] --> [ !Initialised( Fkoprfi ) ]
 
   /* has exactly the trivial AC variant */
 
 rule (modulo E) evaluate_client:
-   [ !ClientInit( $C, $S1, $S2, dhExp(P'g', Ee) ), FrDH( Fb ) ]
-  --[ ClientEvaluate( $C, $S1, $S2, dhExp(P'g', Ee) ) ]->
+   [ !ClientInit( dhExp(P'g', Ee) ), FrDH( Fb ) ]
+  --[ ClientEvaluate( dhExp(P'g', Ee) ) ]->
    [
-   ClientEval( $C, $S1, $S2, dhExp(P'g', Ee), Fb ),
-   Out( <$C, $S1, dhExp(dhExp(P'g', Ee), Fb)> ),
-   Out( <$C, $S2, dhExp(dhExp(P'g', Ee), Fb)> )
+   ClientEval( dhExp(P'g', Ee), Fb ),
+   Out( dhExp(dhExp(P'g', Ee), Fb) )
    ]
 
   /* has exactly the trivial AC variant */
 
 rule (modulo E) evaluate_server:
-   [
-   In( <$C, $Si, dhExp(P'g', Ee)> ), !Initialised( $C, $Si, Fkoprfi )
-   ]
-  --[ ServerEval( ) ]->
-   [ Out( <$C, $Si, dhExp(dhExp(P'g', Ee), Fkoprfi)> ) ]
+   [ In( dhExp(P'g', Ee) ), !Initialised( Fkoprfi ) ]
+  -->
+   [ Out( dhExp(dhExp(P'g', Ee), Fkoprfi) ) ]
 
   /* has exactly the trivial AC variant */
 
 rule (modulo E) evaluate_finish:
    [
-   ClientEval( $C, $S1, $S2, dhExp(P'g', Ee), Fb ),
-   In( <$C, $S1, dhExp(P'g', Epart1)> ),
-   In( <$C, $S2, dhExp(P'g', Epart2)> )
+   ClientEval( dhExp(P'g', Ee), Fb ), In( dhExp(P'g', Epart1) ),
+   In( dhExp(P'g', Epart2) )
    ]
   --[
-  ClientFinish( $C, $S1, $S2, dhExp(P'g', Ee),
-                h(<dhExp(P'g', Ee), 
-                   dhExp(dhMult(dhExp(P'g', Epart1), dhExp(P'g', Epart2)), dhInv(Fb))
-                  >)
+  ClientFinish( dhExp(P'g', Ee),
+                dhExp(dhMult(dhExp(P'g', Epart1), dhExp(P'g', Epart2)), dhInv(Fb))
   )
   ]->
    [ ]
@@ -90,72 +63,62 @@ rule (modulo E) evaluate_finish:
 
 lemma executability:
   exists-trace
-  "((((¬(∃ #i. AdversaryAction( ) @ #i)) ∧
-      (∀ C1a S1a S2a Gxa ya C1b S1b S2b Gxb yb #i #j.
-        ((ClientInitialise( C1a, S1a, S2a, Gxa, ya ) @ #i) ∧
-         (ClientInitialise( C1b, S1b, S2b, Gxb, yb ) @ #j)) ⇒
-        (#i = #j))) ∧
-     (∀ C1a S1a S2a Gxa C1b S1b S2b Gxb #i #j.
-       ((ClientEvaluate( C1a, S1a, S2a, Gxa ) @ #i) ∧
-        (ClientEvaluate( C1b, S1b, S2b, Gxb ) @ #j)) ⇒
+  "(((∀ Gx1 Gy1 Gx2 Gy2 #i #j.
+       ((ClientInitialise( Gx1, Gy1 ) @ #i) ∧
+        (ClientInitialise( Gx2, Gy2 ) @ #j)) ⇒
+       (#i = #j)) ∧
+     (∀ Gx1 Gx2 #i #j.
+       ((ClientEvaluate( Gx1 ) @ #i) ∧ (ClientEvaluate( Gx2 ) @ #j)) ⇒
        (#i = #j))) ∧
-    (∀ C1a S1a S2a Gxa ya C1b S1b S2b Gxb yb #i #j.
-      ((ClientFinish( C1a, S1a, S2a, Gxa, ya ) @ #i) ∧
-       (ClientFinish( C1b, S1b, S2b, Gxb, yb ) @ #j)) ⇒
+    (∀ Gx1 Gy1 Gx2 Gy2 #i #j.
+      ((ClientFinish( Gx1, Gy1 ) @ #i) ∧
+       (ClientFinish( Gx2, Gy2 ) @ #j)) ⇒
       (#i = #j))) ∧
-   (∃ C S1 S2 Gx y #i #j #k.
-     ((ClientInitialise( C, S1, S2, Gx, y ) @ #i) ∧
-      (ClientEvaluate( C, S1, S2, Gx ) @ #j)) ∧
-     (ClientFinish( C, S1, S2, Gx, y ) @ #k))"
+   (∃ Gx Gy #i #j #k.
+     ((ClientInitialise( Gx, Gy ) @ #i) ∧ (ClientEvaluate( Gx ) @ #j)) ∧
+     (ClientFinish( Gx, Gy ) @ #k))"
 /*
 guarded formula characterizing all satisfying traces:
-"(∀ #i. (AdversaryAction( ) @ #i) ⇒ ⊥) ∧
- (∀ C1a S1a S2a Gxa ya C1b S1b S2b Gxb yb #i #j.
-   (ClientInitialise( C1a, S1a, S2a, Gxa, ya ) @ #i) ∧
-   (ClientInitialise( C1b, S1b, S2b, Gxb, yb ) @ #j)
+"(∀ Gx1 Gy1 Gx2 Gy2 #i #j.
+   (ClientInitialise( Gx1, Gy1 ) @ #i) ∧
+   (ClientInitialise( Gx2, Gy2 ) @ #j)
   ⇒
    #i = #j) ∧
- (∀ C1a S1a S2a Gxa C1b S1b S2b Gxb #i #j.
-   (ClientEvaluate( C1a, S1a, S2a, Gxa ) @ #i) ∧
-   (ClientEvaluate( C1b, S1b, S2b, Gxb ) @ #j)
+ (∀ Gx1 Gx2 #i #j.
+   (ClientEvaluate( Gx1 ) @ #i) ∧ (ClientEvaluate( Gx2 ) @ #j)
   ⇒
    #i = #j) ∧
- (∀ C1a S1a S2a Gxa ya C1b S1b S2b Gxb yb #i #j.
-   (ClientFinish( C1a, S1a, S2a, Gxa, ya ) @ #i) ∧
-   (ClientFinish( C1b, S1b, S2b, Gxb, yb ) @ #j)
+ (∀ Gx1 Gy1 Gx2 Gy2 #i #j.
+   (ClientFinish( Gx1, Gy1 ) @ #i) ∧ (ClientFinish( Gx2, Gy2 ) @ #j)
   ⇒
    #i = #j) ∧
- (∃ C S1 S2 Gx y #i #j #k.
-   (ClientInitialise( C, S1, S2, Gx, y ) @ #i) ∧
-   (ClientEvaluate( C, S1, S2, Gx ) @ #j) ∧
-   (ClientFinish( C, S1, S2, Gx, y ) @ #k))"
+ (∃ Gx Gy #i #j #k.
+   (ClientInitialise( Gx, Gy ) @ #i) ∧
+   (ClientEvaluate( Gx ) @ #j) ∧
+   (ClientFinish( Gx, Gy ) @ #k))"
 */
 simplify
-solve( ClientInitialise( C, S1, S2, Gx, y ) @ #i )
+solve( ClientInitialise( Gx, Gy ) @ #i )
   case init_client
-  solve( ClientEvaluate( $C, $S1, $S2, dhExp(P'g', Fe) ) @ #j )
+  solve( ClientEvaluate( dhExp(P'g', Fe) ) @ #j )
     case evaluate_client
-    solve( ClientFinish( $C, $S1, $S2, dhExp(P'g', Fe),
-                         h(<dhExp(P'g', Fe), 
-                            dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf1, Fkoprf2)))>)
+    solve( ClientFinish( dhExp(P'g', Fe),
+                         dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf1, Fkoprf2)))
            ) @ #k )
       case evaluate_finish_case_1
-      solve( !ClientInit( $C, $S1, $S2, dhExp(P'g', Fe) ) ▶₀ #j )
+      solve( !ClientInit( dhExp(P'g', Fe) ) ▶₀ #j )
         case init_client
-        solve( ClientEval( $C, $S1, $S2, dhExp(P'g', Fe), Fb.1 ) ▶₀ #k )
+        solve( ClientEval( dhExp(P'g', Fe), Fb.1 ) ▶₀ #k )
           case evaluate_client_case_1
           solve( !KU( dhMult(dhExp(P'g', Evy),
                              dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf1, Fkoprf2))))
-                 ) @ #vk.5 )
+                 ) @ #vk )
             case coerce
             solve( !KD( dhMult(dhExp(P'g', Evy),
                                dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf1, Fkoprf2))))
                    ) ▶₀ #vk )
               case Using_OutFacts_case_01
-              solve( !Initialised( $C.1, $Si, Fe ) ▶₁ #vr )
-                case init_server
-                by contradiction /* adversary derived secret element! */
-              qed
+              by sorry
             next
               case Using_OutFacts_case_02
               by sorry
@@ -170,45 +133,33 @@ solve( ClientInitialise( C, S1, S2, Gx, y ) @ #i )
               by sorry
             next
               case Using_OutFacts_case_06
-              solve( !Initialised( $C.1, $Si, Fe ) ▶₁ #vr )
-                case init_server
-                by contradiction /* adversary derived secret element! */
-              qed
+              by sorry
             next
               case Using_OutFacts_case_07
-              solve( !Initialised( $C.1, $Si, Fe ) ▶₁ #vr )
-                case init_server
-                by contradiction /* adversary derived secret element! */
-              qed
+              by sorry
             next
               case Using_OutFacts_case_08
               by sorry
             next
               case Using_OutFacts_case_09
-              solve( !Initialised( $C.1, $Si, Fkoprf1 ) ▶₁ #vr )
-                case init_server
-                solve( !Initialised( $C.2, $Si.1, Fkoprf2 ) ▶₁ #vr.1 )
-                  case init_server
-                  solve( !KU( Fkoprf1 ) @ #vk.28 )
-                    case init_client
-                    solve( !KU( Fkoprf2 ) @ #vk.30 )
-                      case init_client
-                      solve( !KU( dhMult(dhExp(P'g', Evy.1),
-                                         dhExp(P'g', dhTimesE(Ex.2, Fe)))
-                             ) @ #vk.26 )
-                        case coerce
-                        by sorry
-                      qed
-                    qed
-                  qed
-                qed
-              qed
+              by sorry
             next
               case Using_OutFacts_case_10
               by sorry
             next
               case Using_OutFacts_case_11
-              by sorry
+              solve( !Initialised( Fkoprf1 ) ▶₁ #vr )
+                case init_server
+                solve( !Initialised( Fkoprf2 ) ▶₁ #vr.1 )
+                  case init_server
+                  solve( !KU( dhMult(dhExp(P'g', Evy.1),
+                                     dhExp(P'g', dhTimesE(Ex.2, Fe)))
+                         ) @ #vk.7 )
+                    case coerce
+                    by sorry
+                  qed
+                qed
+              qed
             next
               case Using_OutFacts_case_12
               by sorry
@@ -332,9 +283,6 @@ solve( ClientInitialise( C, S1, S2, Gx, y ) @ #i )
             next
               case Using_OutFacts_case_52
               by sorry
-            next
-              case Using_OutFacts_case_53
-              by sorry
             qed
           qed
         next
@@ -344,7 +292,7 @@ solve( ClientInitialise( C, S1, S2, Gx, y ) @ #i )
       qed
     next
       case evaluate_finish_case_2
-      by sorry /* removed */
+      by sorry
     next
       case evaluate_finish_case_3
       by sorry
@@ -354,20 +302,6 @@ solve( ClientInitialise( C, S1, S2, Gx, y ) @ #i )
     qed
   qed
 qed
-
-lemma input_secrecy:
-  all-traces
-  "∀ C S1 S2 Gx y #i.
-    (ClientInitialise( C, S1, S2, Gx, y ) @ #i) ⇒
-    (¬(∃ #j. !KU( Gx ) @ #j))"
-/*
-guarded formula characterizing all counter-examples:
-"∃ C S1 S2 Gx y #i.
-  (ClientInitialise( C, S1, S2, Gx, y ) @ #i)
- ∧
-  ∃ #j. (!KU( Gx ) @ #j)"
-*/
-by sorry
 
 
 
@@ -384,11 +318,9 @@ Quantifier sorts
 ================
 
   lemma `executability' uses quantifiers with wrong sort:
-    ("xa",LSortG), ("xb",LSortG), ("xa",LSortG), ("xb",LSortG),
-    ("xa",LSortG), ("xb",LSortG), ("x",LSortG)
-  
-  lemma `input_secrecy' uses quantifiers with wrong sort:
-    ("x",LSortG)
+    ("x1",LSortG), ("y1",LSortG), ("x2",LSortG), ("y2",LSortG),
+    ("x1",LSortG), ("x2",LSortG), ("x1",LSortG), ("y1",LSortG),
+    ("x2",LSortG), ("y2",LSortG), ("x",LSortG), ("y",LSortG)
 
 Message Derivation Checks
 =========================
@@ -396,27 +328,27 @@ Message Derivation Checks
   The variables of the follwing rule(s) are not derivable from their premises, you may be performing unintended pattern matching.
 
 Rule init_client: 
-Failed to derive Variable(s): $C, $S1, $S2, Fe, Fkoprf1, Fkoprf2
+Failed to derive Variable(s): Fe, Fkoprf1, Fkoprf2
 
 Rule init_server: 
-Failed to derive Variable(s): $C, $Si, Fkoprfi
+Failed to derive Variable(s): Fkoprfi
 
 Rule evaluate_client: 
-Failed to derive Variable(s): $C, $S1, $S2, Ee, Fb
+Failed to derive Variable(s): Ee, Fb
 
 Rule evaluate_server: 
-Failed to derive Variable(s): $C, $Si, Ee, Fkoprfi
+Failed to derive Variable(s): Ee, Fkoprfi
 
 Rule evaluate_finish: 
-Failed to derive Variable(s): $C, $S1, $S2, Ee, Epart1, Epart2, Fb
+Failed to derive Variable(s): Ee, Epart1, Epart2, Fb
 */
 
 /*
 Generated from:
 Tamarin version 1.9.0
 Maude version 3.3.1
-Git revision: 735c36eb3a4c9bfef2e724951b0a9dec86708434, branch: dh-with-addition
-Compiled at: 2025-11-02 10:45:53.507976588 UTC
+Git revision: 735c36eb3a4c9bfef2e724951b0a9dec86708434 (with uncommited changes), branch: dh-with-addition
+Compiled at: 2025-11-03 09:58:47.610198015 UTC
 */
 
 end
