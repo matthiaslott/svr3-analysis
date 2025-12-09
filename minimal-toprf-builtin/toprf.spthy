@@ -26,7 +26,7 @@ rule compromise:
 rule init_client:
     let
       x = dhExp(P'g', Fe)
-      temp = dhExp(dhExp(dhExp(x, Fkoprf1), Fkoprf2), Fkoprf3)
+      temp = dhMult(dhMult(dhExp(x, Fkoprf1), dhExp(x, Fkoprf2)), dhExp(x, Fkoprf3))
       y = h(<x, temp>)
     in
     [ FrDH(Fe), FrDH(Fkoprf1), FrDH(Fkoprf2), FrDH(Fkoprf3) ]
