@@ -1,0 +1,1608 @@
+theory TOPRF begin
+
+// Function signature and definition of the equational theory E
+
+builtins: DH-multiplication
+functions: fst/1, h/1, pair/2, snd/1
+equations: fst(<x.1, x.2>) = x.1, snd(<x.1, x.2>) = x.2
+
+
+
+
+
+
+
+
+
+predicate: DISTINCT( x, y, z )<=>¬(((x = y) ∨ (x = z)) ∨ (y = z))
+
+rule (modulo E) compromise:
+   [ !Keyshare( $C, $Si, Fkoprfi ) ]
+  --[ Compromised( $Si ), AdversaryAction( ) ]->
+   [ Out( Fkoprfi ) ]
+
+  /* has exactly the trivial AC variant */
+
+restriction Restr_client_init_1:
+  "∀ x #NOW x.1 x.2 x.3 x.4 x.5.
+    (Restr_client_init_1( x, x.1, x.2, x.3, x.4, x.5 ) @ #NOW) ⇒
+    (¬(((x = x.1) ∨ (x.2 = x.3)) ∨ (x.4 = x.5)))"
+  // safety formula
+
+rule (modulo E) client_init:
+   [ FrDH( Fe ), FrDH( Fkoprf1 ), FrDH( Fkoprf2 ), FrDH( Fkoprf3 ) ]
+  --[
+  ClientInitialise( $C, $S1, $S2, $S3, dhExp(P'g', Fe),
+                    h(<dhExp(P'g', Fe), 
+                       dhMult(dhMult(dhExp(dhExp(P'g', Fe), Fkoprf1),
+                                     dhExp(dhExp(P'g', Fe), Fkoprf2)),
+                              dhExp(dhExp(P'g', Fe), Fkoprf3))
+                      >)
+  ),
+  !Keyshare( $C, $S1, Fkoprf1 ), !Keyshare( $C, $S2, Fkoprf2 ),
+  !Keyshare( $C, $S3, Fkoprf3 ),
+  Restr_client_init_1( $S1, $S2, $S1, $S3, $S2, $S3 )
+  ]->
+   [
+   !ClientInit( $C, dhExp(P'g', Fe) ), !Keyshare( $C, $S1, Fkoprf1 ),
+   !Keyshare( $C, $S2, Fkoprf2 ), !Keyshare( $C, $S3, Fkoprf3 )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) client_eval:
+   [ !ClientInit( $C, dhExp(P'g', Fe) ), FrDH( Fb ) ]
+  --[ ClientEvaluate( $C, $S1, $S2, $S3, dhExp(P'g', Fe) ) ]->
+   [
+   ClientEval( $C, $S1, $S2, $S3, dhExp(P'g', Fe), Fb ),
+   Out( <$C, $S1, dhExp(dhExp(P'g', Fe), Fb)> ),
+   Out( <$C, $S2, dhExp(dhExp(P'g', Fe), Fb)> ),
+   Out( <$C, $S3, dhExp(dhExp(P'g', Fe), Fb)> )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) server_eval:
+   [ In( <$C, $Si, dhExp(P'g', Ee)> ), !Keyshare( $C, $Si, Fkoprfi ) ]
+  -->
+   [ Out( <$C, $Si, dhExp(dhExp(P'g', Ee), Fkoprfi)> ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) client_finish:
+   [
+   ClientEval( $C, $S1, $S2, $S3, dhExp(P'g', Fe), Fb ),
+   In( <$C, $S1, dhExp(P'g', Epart1)> ),
+   In( <$C, $S2, dhExp(P'g', Epart2)> ),
+   In( <$C, $S3, dhExp(P'g', Epart3)> )
+   ]
+  --[
+  ClientFinish( $C, $S1, $S2, $S3, dhExp(P'g', Fe),
+                h(<dhExp(P'g', Fe), 
+                   dhExp(dhMult(dhMult(dhExp(P'g', Epart1), dhExp(P'g', Epart2)),
+                                dhExp(P'g', Epart3)),
+                         dhInv(Fb))
+                  >)
+  ),
+  ExecutabilityHelper( dhExp(P'g', Epart1), dhExp(P'g', Epart2),
+                       dhExp(P'g', Epart3)
+  )
+  ]->
+   [ ]
+
+  /* has exactly the trivial AC variant */
+
+lemma executability:
+  exists-trace
+  "(¬(∃ #i. AdversaryAction( ) @ #i)) ∧
+   (∃ C S1 S2 S3 Gx y #i #j #k.
+     (((ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i) ∧
+       (ClientEvaluate( C, S1, S2, S3, Gx ) @ #j)) ∧
+      (ClientFinish( C, S1, S2, S3, Gx, y ) @ #k)) ∧
+     (∃ Fb Fkoprf1 Fkoprf2 Fkoprf3.
+       ExecutabilityHelper( dhExp(dhExp(Gx, Fkoprf1), Fb),
+                            dhExp(dhExp(Gx, Fkoprf2), Fb), dhExp(dhExp(Gx, Fkoprf3), Fb)
+       ) @ #k))"
+/*
+guarded formula characterizing all satisfying traces:
+"(∀ #i. (AdversaryAction( ) @ #i) ⇒ ⊥) ∧
+ (∃ C S1 S2 S3 Gx y #i #j #k.
+   (ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i) ∧
+   (ClientEvaluate( C, S1, S2, S3, Gx ) @ #j) ∧
+   (ClientFinish( C, S1, S2, S3, Gx, y ) @ #k)
+  ∧
+   ∃ Fb Fkoprf1 Fkoprf2 Fkoprf3.
+    (ExecutabilityHelper( dhExp(dhExp(Gx, Fkoprf1), Fb),
+                          dhExp(dhExp(Gx, Fkoprf2), Fb), dhExp(dhExp(Gx, Fkoprf3), Fb)
+     ) @ #k))"
+*/
+simplify
+solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
+  case client_init
+  solve( ClientEvaluate( $C, $S1, $S2, $S3, dhExp(P'g', Fe) ) @ #j )
+    case client_eval
+    solve( ExecutabilityHelper( dhExp(P'g',
+                                      dhTimesE(Fe, dhTimesE(Fkoprf1.1, Fb.1))),
+                                dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.1, Fb.1))),
+                                dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.1, Fb.1)))
+           ) @ #k )
+      case client_finish
+      solve( ClientFinish( $C, $S1, $S2, $S3, dhExp(P'g', Fe),
+                           h(<dhExp(P'g', Fe), 
+                              dhMult(dhExp(P'g', dhTimesE(Fe, Fkoprf1)),
+                                     dhMult(dhExp(P'g', dhTimesE(Fe, Fkoprf2)),
+                                            dhExp(P'g', dhTimesE(Fe, Fkoprf3))))
+                             >)
+             ) @ #k )
+        case client_finish_case_1
+        solve( !ClientInit( $C, dhExp(P'g', Fe) ) ▶₀ #j )
+          case client_init
+          solve( ClientEval( $C, $S1, $S2, $S3, dhExp(P'g', Fe), Fb.1
+                 ) ▶₀ #k )
+            case client_eval_case_1
+            solve( !KU( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2, Fb)))
+                   ) @ #vk.6 )
+              case coerce
+              solve( !KD( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2, Fb)))
+                     ) ▶₀ #vk )
+                case Using_OutFacts_case_01
+                by solve( !Keyshare( $C.1, $Si, Fb ) ▶₁ #vr )
+              next
+                case Using_OutFacts_case_02
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_03
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_04
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_05
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_06
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_07
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_08
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_09
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_10
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_11
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_12
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_13
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_14
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_15
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_16
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_17
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_18
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_19
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_20
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_21
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_22
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_23
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_24
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_25
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_26
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_27
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_28
+                by contradiction /* from formulas */
+              qed
+            qed
+          next
+            case client_eval_case_2
+            solve( !ClientInit( $C, dhExp(P'g', Fe) ) ▶₀ #vr )
+              case client_init
+              solve( !KU( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2, Fb.1)))
+                     ) @ #vk.6 )
+                case coerce
+                solve( !KD( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2, Fb.1)))
+                       ) ▶₀ #vk )
+                  case Using_OutFacts_case_01
+                  by solve( !Keyshare( $C.1, $Si, Fb.1 ) ▶₁ #vr.1 )
+                next
+                  case Using_OutFacts_case_02
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_03
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_04
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_05
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_06
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_07
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_08
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_09
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_10
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_11
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_12
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_13
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_14
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_15
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_16
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_17
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_18
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_19
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_20
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_21
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_22
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_23
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_24
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_25
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_26
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_27
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_28
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_29
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_30
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_31
+                  by contradiction /* from formulas */
+                qed
+              qed
+            qed
+          qed
+        qed
+      next
+        case client_finish_case_2
+        solve( !ClientInit( $C, dhExp(P'g', Fe) ) ▶₀ #j )
+          case client_init
+          solve( ClientEval( $C, $S1, $S2, $S3, dhExp(P'g', Fe), Fb.1
+                 ) ▶₀ #k )
+            case client_eval_case_1
+            solve( !KU( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3, Fb)))
+                   ) @ #vk.6 )
+              case coerce
+              solve( !KD( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3, Fb)))
+                     ) ▶₀ #vk )
+                case Using_OutFacts_case_01
+                by solve( !Keyshare( $C.1, $Si, Fb ) ▶₁ #vr )
+              next
+                case Using_OutFacts_case_02
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_03
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_04
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_05
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_06
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_07
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_08
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_09
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_10
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_11
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_12
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_13
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_14
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_15
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_16
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_17
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_18
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_19
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_20
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_21
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_22
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_23
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_24
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_25
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_26
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_27
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_28
+                by contradiction /* from formulas */
+              qed
+            qed
+          next
+            case client_eval_case_2
+            solve( !ClientInit( $C, dhExp(P'g', Fe) ) ▶₀ #vr )
+              case client_init
+              solve( !KU( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3, Fb.1)))
+                     ) @ #vk.6 )
+                case coerce
+                solve( !KD( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3, Fb.1)))
+                       ) ▶₀ #vk )
+                  case Using_OutFacts_case_01
+                  by solve( !Keyshare( $C.1, $Si, Fb.1 ) ▶₁ #vr.1 )
+                next
+                  case Using_OutFacts_case_02
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_03
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_04
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_05
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_06
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_07
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_08
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_09
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_10
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_11
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_12
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_13
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_14
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_15
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_16
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_17
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_18
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_19
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_20
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_21
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_22
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_23
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_24
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_25
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_26
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_27
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_28
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_29
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_30
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_31
+                  by contradiction /* from formulas */
+                qed
+              qed
+            qed
+          qed
+        qed
+      next
+        case client_finish_case_3
+        solve( !ClientInit( $C, dhExp(P'g', Fe) ) ▶₀ #j )
+          case client_init
+          solve( ClientEval( $C, $S1, $S2, $S3, dhExp(P'g', Fe), Fb.1
+                 ) ▶₀ #k )
+            case client_eval_case_1
+            solve( !KU( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf1, Fb)))
+                   ) @ #vk.6 )
+              case coerce
+              solve( !KD( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf1, Fb)))
+                     ) ▶₀ #vk )
+                case Using_OutFacts_case_01
+                by solve( !Keyshare( $C.1, $Si, Fb ) ▶₁ #vr )
+              next
+                case Using_OutFacts_case_02
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_03
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_04
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_05
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_06
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_07
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_08
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_09
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_10
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_11
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_12
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_13
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_14
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_15
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_16
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_17
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_18
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_19
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_20
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_21
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_22
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_23
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_24
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_25
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_26
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_27
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_28
+                by contradiction /* from formulas */
+              qed
+            qed
+          next
+            case client_eval_case_2
+            solve( !ClientInit( $C, dhExp(P'g', Fe) ) ▶₀ #vr )
+              case client_init
+              solve( !KU( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf1, Fb.1)))
+                     ) @ #vk.6 )
+                case coerce
+                solve( !KD( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf1, Fb.1)))
+                       ) ▶₀ #vk )
+                  case Using_OutFacts_case_01
+                  by solve( !Keyshare( $C.1, $Si, Fb.1 ) ▶₁ #vr.1 )
+                next
+                  case Using_OutFacts_case_02
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_03
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_04
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_05
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_06
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_07
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_08
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_09
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_10
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_11
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_12
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_13
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_14
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_15
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_16
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_17
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_18
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_19
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_20
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_21
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_22
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_23
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_24
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_25
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_26
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_27
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_28
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_29
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_30
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_31
+                  by contradiction /* from formulas */
+                qed
+              qed
+            qed
+          qed
+        qed
+      next
+        case client_finish_case_4
+        solve( !ClientInit( $C, dhExp(P'g', Fe) ) ▶₀ #j )
+          case client_init
+          solve( ClientEval( $C, $S1, $S2, $S3, dhExp(P'g', Fe), Fb.1
+                 ) ▶₀ #k )
+            case client_eval_case_1
+            solve( !KU( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf1, Fb)))
+                   ) @ #vk.6 )
+              case coerce
+              solve( !KD( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf1, Fb)))
+                     ) ▶₀ #vk )
+                case Using_OutFacts_case_01
+                by solve( !Keyshare( $C.1, $Si, Fb ) ▶₁ #vr )
+              next
+                case Using_OutFacts_case_02
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_03
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_04
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_05
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_06
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_07
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_08
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_09
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_10
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_11
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_12
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_13
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_14
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_15
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_16
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_17
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_18
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_19
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_20
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_21
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_22
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_23
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_24
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_25
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_26
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_27
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_28
+                by contradiction /* from formulas */
+              qed
+            qed
+          next
+            case client_eval_case_2
+            solve( !ClientInit( $C, dhExp(P'g', Fe) ) ▶₀ #vr )
+              case client_init
+              solve( !KU( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf1, Fb.1)))
+                     ) @ #vk.6 )
+                case coerce
+                solve( !KD( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf1, Fb.1)))
+                       ) ▶₀ #vk )
+                  case Using_OutFacts_case_01
+                  by solve( !Keyshare( $C.1, $Si, Fb.1 ) ▶₁ #vr.1 )
+                next
+                  case Using_OutFacts_case_02
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_03
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_04
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_05
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_06
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_07
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_08
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_09
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_10
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_11
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_12
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_13
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_14
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_15
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_16
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_17
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_18
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_19
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_20
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_21
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_22
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_23
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_24
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_25
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_26
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_27
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_28
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_29
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_30
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_31
+                  by contradiction /* from formulas */
+                qed
+              qed
+            qed
+          qed
+        qed
+      next
+        case client_finish_case_5
+        solve( !ClientInit( $C, dhExp(P'g', Fe) ) ▶₀ #j )
+          case client_init
+          solve( ClientEval( $C, $S1, $S2, $S3, dhExp(P'g', Fe), Fb.1
+                 ) ▶₀ #k )
+            case client_eval_case_1
+            solve( !KU( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3, Fb)))
+                   ) @ #vk.6 )
+              case coerce
+              solve( !KD( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3, Fb)))
+                     ) ▶₀ #vk )
+                case Using_OutFacts_case_01
+                by solve( !Keyshare( $C.1, $Si, Fb ) ▶₁ #vr )
+              next
+                case Using_OutFacts_case_02
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_03
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_04
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_05
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_06
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_07
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_08
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_09
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_10
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_11
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_12
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_13
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_14
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_15
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_16
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_17
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_18
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_19
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_20
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_21
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_22
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_23
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_24
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_25
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_26
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_27
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_28
+                by contradiction /* from formulas */
+              qed
+            qed
+          next
+            case client_eval_case_2
+            solve( !ClientInit( $C, dhExp(P'g', Fe) ) ▶₀ #vr )
+              case client_init
+              solve( !KU( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3, Fb.1)))
+                     ) @ #vk.6 )
+                case coerce
+                solve( !KD( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3, Fb.1)))
+                       ) ▶₀ #vk )
+                  case Using_OutFacts_case_01
+                  by solve( !Keyshare( $C.1, $Si, Fb.1 ) ▶₁ #vr.1 )
+                next
+                  case Using_OutFacts_case_02
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_03
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_04
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_05
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_06
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_07
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_08
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_09
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_10
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_11
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_12
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_13
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_14
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_15
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_16
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_17
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_18
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_19
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_20
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_21
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_22
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_23
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_24
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_25
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_26
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_27
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_28
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_29
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_30
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_31
+                  by contradiction /* from formulas */
+                qed
+              qed
+            qed
+          qed
+        qed
+      next
+        case client_finish_case_6
+        solve( !ClientInit( $C, dhExp(P'g', Fe) ) ▶₀ #j )
+          case client_init
+          solve( ClientEval( $C, $S1, $S2, $S3, dhExp(P'g', Fe), Fb.1
+                 ) ▶₀ #k )
+            case client_eval_case_1
+            solve( !KU( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2, Fb)))
+                   ) @ #vk.6 )
+              case coerce
+              solve( !KD( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2, Fb)))
+                     ) ▶₀ #vk )
+                case Using_OutFacts_case_01
+                by solve( !Keyshare( $C.1, $Si, Fb ) ▶₁ #vr )
+              next
+                case Using_OutFacts_case_02
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_03
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_04
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_05
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_06
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_07
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_08
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_09
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_10
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_11
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_12
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_13
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_14
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_15
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_16
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_17
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_18
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_19
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_20
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_21
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_22
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_23
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_24
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_25
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_26
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_27
+                by contradiction /* from formulas */
+              next
+                case Using_OutFacts_case_28
+                by contradiction /* from formulas */
+              qed
+            qed
+          next
+            case client_eval_case_2
+            solve( !ClientInit( $C, dhExp(P'g', Fe) ) ▶₀ #vr )
+              case client_init
+              solve( !KU( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2, Fb.1)))
+                     ) @ #vk.6 )
+                case coerce
+                solve( !KD( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2, Fb.1)))
+                       ) ▶₀ #vk )
+                  case Using_OutFacts_case_01
+                  by solve( !Keyshare( $C.1, $Si, Fb.1 ) ▶₁ #vr.1 )
+                next
+                  case Using_OutFacts_case_02
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_03
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_04
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_05
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_06
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_07
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_08
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_09
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_10
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_11
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_12
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_13
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_14
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_15
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_16
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_17
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_18
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_19
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_20
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_21
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_22
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_23
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_24
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_25
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_26
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_27
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_28
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_29
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_30
+                  by contradiction /* from formulas */
+                next
+                  case Using_OutFacts_case_31
+                  by contradiction /* from formulas */
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma input_secrecy:
+  all-traces
+  "∀ C S1 S2 S3 Gx y #i.
+    (ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i) ⇒
+    (¬(∃ #j. !KU( Gx ) @ #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ C S1 S2 S3 Gx y #i.
+  (ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i)
+ ∧
+  ∃ #j. (!KU( Gx ) @ #j)"
+*/
+simplify
+solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
+  case client_init
+  solve( !KU( dhExp(P'g', Fe) ) @ #j )
+    case coerce
+    solve( !KD( dhExp(P'g', Fe) ) ▶₀ #j )
+      case Using_OutFacts_case_1
+      by solve( !Keyshare( $C.2, $Si, Fb ) ▶₀ #vr.1 )
+    next
+      case Using_OutFacts_case_2
+      by solve( !Keyshare( $C.2, $Si, Fb ) ▶₀ #vr.1 )
+    next
+      case Using_OutFacts_case_3
+      by solve( !Keyshare( $C.2, $Si, Fb ) ▶₀ #vr.1 )
+    next
+      case Using_OutFacts_case_4
+      by solve( !Keyshare( $C.1, $Si, Fe ) ▶₁ #vr )
+    next
+      case Using_OutFacts_case_5
+      by solve( !Keyshare( $C.1, $Si, Fe ) ▶₁ #vr )
+    next
+      case Using_OutFacts_case_6
+      by solve( !Keyshare( $C.1, $Si, Fe ) ▶₀ #vr )
+    qed
+  qed
+qed
+
+lemma output_secrecy:
+  all-traces
+  "∀ C S1 S2 S3 Gx y #i.
+    (ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i) ⇒
+    (¬(∃ #j. !KU( y ) @ #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ C S1 S2 S3 Gx y #i.
+  (ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i)
+ ∧
+  ∃ #j. (!KU( y ) @ #j)"
+*/
+simplify
+solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
+  case client_init
+  solve( !KU( h(<dhExp(P'g', Fe), 
+                 dhMult(dhExp(P'g', dhTimesE(Fe, Fkoprf1)),
+                        dhMult(dhExp(P'g', dhTimesE(Fe, Fkoprf2)),
+                               dhExp(P'g', dhTimesE(Fe, Fkoprf3))))
+                >)
+         ) @ #j )
+    case c_h
+    solve( !KU( dhExp(P'g', Fe) ) @ #vk.1 )
+      case coerce
+      solve( !KD( dhExp(P'g', Fe) ) ▶₀ #vk )
+        case Using_OutFacts_case_1
+        by solve( !Keyshare( $C.2, $Si, Fb ) ▶₀ #vr.1 )
+      next
+        case Using_OutFacts_case_2
+        by solve( !Keyshare( $C.2, $Si, Fb ) ▶₀ #vr.1 )
+      next
+        case Using_OutFacts_case_3
+        by solve( !Keyshare( $C.2, $Si, Fb ) ▶₀ #vr.1 )
+      next
+        case Using_OutFacts_case_4
+        by solve( !Keyshare( $C.1, $Si, Fe ) ▶₁ #vr )
+      next
+        case Using_OutFacts_case_5
+        by solve( !Keyshare( $C.1, $Si, Fe ) ▶₁ #vr )
+      next
+        case Using_OutFacts_case_6
+        by solve( !Keyshare( $C.1, $Si, Fe ) ▶₀ #vr )
+      qed
+    qed
+  next
+    case coerce
+    solve( !KD( h(<dhExp(P'g', Fe), 
+                   dhMult(dhExp(P'g', dhTimesE(Fe, Fkoprf1)),
+                          dhMult(dhExp(P'g', dhTimesE(Fe, Fkoprf2)),
+                                 dhExp(P'g', dhTimesE(Fe, Fkoprf3))))
+                  >)
+           ) ▶₀ #j )
+      case client_eval_case_1
+      by contradiction /* impossible chain */
+    next
+      case client_eval_case_2
+      by contradiction /* impossible chain */
+    next
+      case client_eval_case_3
+      by contradiction /* impossible chain */
+    next
+      case compromise
+      by contradiction /* impossible chain */
+    next
+      case freshNZE
+      by contradiction /* cyclic */
+    next
+      case pubGConstr_case_1
+      by contradiction /* forbidden KD-fact */
+    next
+      case pubGConstr_case_2
+      by contradiction /* forbidden KD-fact */
+    next
+      case pubGConstr_case_3
+      by contradiction /* cyclic */
+    next
+      case server_eval
+      solve( (#vl, 0) ~~> (#j, 0) )
+        case d_0_fst
+        by contradiction /* cyclic */
+      next
+        case d_0_snd
+        solve( (#vr.1, 0) ~~> (#j, 0) )
+          case d_0_fst
+          by contradiction /* cyclic */
+        next
+          case d_0_snd
+          by solve( (#vr.2, 0) ~~> (#j, 0) )
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma keyshare_secrecy:
+  all-traces
+  "∀ C Si Fkoprfi #i.
+    (!Keyshare( C, Si, Fkoprfi ) @ #i) ⇒
+    ((¬(∃ #j. !KU( Fkoprfi ) @ #j)) ∨ (∃ #j. Compromised( Si ) @ #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ C Si Fkoprfi #i.
+  (!Keyshare( C, Si, Fkoprfi ) @ #i)
+ ∧
+  (∃ #j. (!KU( Fkoprfi ) @ #j)) ∧
+  (∀ #j. (Compromised( Si ) @ #j) ⇒ ⊥)"
+*/
+simplify
+solve( !Keyshare( C, Si, Fkoprfi ) @ #i )
+  case client_init_case_1
+  solve( !KU( Fkoprfi ) @ #j )
+    case compromise
+    solve( !Keyshare( $C.1, $Si, Fkoprfi ) ▶₀ #vr )
+      case client_init
+      by contradiction /* from formulas */
+    qed
+  qed
+next
+  case client_init_case_2
+  solve( !KU( Fkoprfi ) @ #j )
+    case compromise
+    solve( !Keyshare( $C.1, $Si, Fkoprfi ) ▶₀ #vr )
+      case client_init
+      by contradiction /* from formulas */
+    qed
+  qed
+next
+  case client_init_case_3
+  solve( !KU( Fkoprfi ) @ #j )
+    case compromise
+    solve( !Keyshare( $C.1, $Si, Fkoprfi ) ▶₀ #vr )
+      case client_init
+      by contradiction /* from formulas */
+    qed
+  qed
+qed
+
+lemma res_secrecy:
+  all-traces
+  "∀ C S1 S2 S3 Gx Gres #i.
+    (ClientInitialise( C, S1, S2, S3, Gx, h(<Gx, Gres>) ) @ #i) ⇒
+    (¬(∃ #j. !KU( Gres ) @ #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ C S1 S2 S3 Gx Gres #i.
+  (ClientInitialise( C, S1, S2, S3, Gx, h(<Gx, Gres>) ) @ #i)
+ ∧
+  ∃ #j. (!KU( Gres ) @ #j)"
+*/
+by sorry
+
+
+
+
+
+
+
+
+
+/*
+WARNING: the following wellformedness checks failed!
+
+Quantifier sorts
+================
+
+  Lemma `executability' uses quantifiers with wrong sort:
+    ("x",LSortG), ("b",LSortFrNZE), ("koprf1",LSortFrNZE),
+    ("koprf2",LSortFrNZE), ("koprf3",LSortFrNZE)
+  
+  Lemma `input_secrecy' uses quantifiers with wrong sort:
+    ("x",LSortG)
+  
+  Lemma `output_secrecy' uses quantifiers with wrong sort:
+    ("x",LSortG)
+  
+  Lemma `keyshare_secrecy' uses quantifiers with wrong sort:
+    ("koprfi",LSortFrNZE)
+  
+  Lemma `res_secrecy' uses quantifiers with wrong sort: ("x",LSortG),
+    ("res",LSortG)
+
+Message Derivation Checks
+=========================
+
+  The variables of the following rule(s) are not derivable from their premises, you may be performing unintended pattern matching.
+
+Rule compromise: 
+Failed to derive Variable(s): $C, $Si, Fkoprfi
+
+Rule client_init: 
+Failed to derive Variable(s): $C, $S1, $S2, $S3, Fe, Fkoprf1, Fkoprf2, Fkoprf3
+
+Rule client_eval: 
+Failed to derive Variable(s): $C, $S1, $S2, $S3, Fb, Fe
+
+Rule server_eval: 
+Failed to derive Variable(s): $C, $Si, Ee, Fkoprfi
+
+Rule client_finish: 
+Failed to derive Variable(s): $C, $S1, $S2, $S3, Epart1, Epart2, Epart3, Fb, Fe
+*/
+
+/*
+Generated from:
+Tamarin version 1.11.0
+Maude version 3.5
+Git revision: fed48d7473522ff9bbea72988d04e40a737c4007 (with uncommited changes), branch: dh-with-addition
+Compiled at: 2026-01-09 11:13:28.94069154 UTC
+*/
+
+end
