@@ -93,7 +93,7 @@ rule (modulo E) evaluate_finish:
                   >)
   ),
   ExecutabilityHelper( dhExp(P'g', Epart1), dhExp(P'g', Epart2),
-                       dhExp(P'g', Epart3)
+                       dhExp(P'g', Epart3), Fb
   )
   ]->
    [ ]
@@ -108,7 +108,7 @@ lemma executability:
        (ClientEvaluate( C, S1, S2, S3, Gx ) @ #j)) ∧
       (ClientFinish( C, S1, S2, S3, Gx, y ) @ #k)) ∧
      (ExecutabilityHelper( dhExp(dhExp(Gx, Fkoprf1), Fb),
-                           dhExp(dhExp(Gx, Fkoprf2), Fb), dhExp(dhExp(Gx, Fkoprf3), Fb)
+                           dhExp(dhExp(Gx, Fkoprf2), Fb), dhExp(dhExp(Gx, Fkoprf3), Fb), Fb
       ) @ #k))"
 /*
 guarded formula characterizing all satisfying traces:
@@ -118,7 +118,7 @@ guarded formula characterizing all satisfying traces:
    (ClientEvaluate( C, S1, S2, S3, Gx ) @ #j) ∧
    (ClientFinish( C, S1, S2, S3, Gx, y ) @ #k) ∧
    (ExecutabilityHelper( dhExp(dhExp(Gx, Fkoprf1), Fb),
-                         dhExp(dhExp(Gx, Fkoprf2), Fb), dhExp(dhExp(Gx, Fkoprf3), Fb)
+                         dhExp(dhExp(Gx, Fkoprf2), Fb), dhExp(dhExp(Gx, Fkoprf3), Fb), Fb
     ) @ #k))"
 */
 simplify
@@ -137,63 +137,63 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_02
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_03
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_04
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_05
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_06
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_07
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_08
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_09
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_10
@@ -206,21 +206,21 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_13
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_14
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_15
@@ -230,14 +230,14 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_17
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_18
@@ -247,21 +247,21 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_20
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_21
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_22
@@ -274,14 +274,14 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_25
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_26
@@ -294,7 +294,7 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_29
@@ -304,7 +304,7 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_31
@@ -314,7 +314,7 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_33
@@ -324,7 +324,7 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_35
@@ -334,21 +334,21 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_37
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_38
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_39
@@ -358,14 +358,14 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_41
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_42
@@ -378,7 +378,7 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_45
@@ -388,7 +388,7 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_47
@@ -398,14 +398,14 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_49
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_50
@@ -418,7 +418,7 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     next
       case evaluate_finish_case_53
@@ -428,7 +428,7 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
       by solve( ExecutabilityHelper( dhExp(P'g',
                                            dhTimesE(Fe, dhTimesE(Fkoprf1.2, Fb.3))),
                                      dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.2, Fb.3))),
-                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3)))
+                                     dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.2, Fb.3))), Fb.3
                 ) @ #k )
     qed
   qed
@@ -494,8 +494,8 @@ Failed to derive Variable(s): $C, $S1, $S2, $S3, Ee, Epart1, Epart2, Epart3, Fb
 Generated from:
 Tamarin version 1.11.0
 Maude version 3.5
-Git revision: 29d342fe767340bba559ce43c2dc6b0e54c4fd9f, branch: dh-with-addition
-Compiled at: 2025-12-08 17:08:00.522912072 UTC
+Git revision: fed48d7473522ff9bbea72988d04e40a737c4007 (with uncommited changes), branch: dh-with-addition
+Compiled at: 2026-01-09 11:13:28.94069154 UTC
 */
 
 end

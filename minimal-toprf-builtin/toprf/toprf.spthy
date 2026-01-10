@@ -71,7 +71,7 @@ rule evaluate_finish:
       y = h(<x, temp>)
     in
     [ ClientEval($C, $S1, $S2, $S3, x, Fb), In(<$C, $S1, part1>), In(<$C, $S2, part2>), In(<$C, $S3, part3>) ]
-  --[ ClientFinish($C, $S1, $S2, $S3, x, y), ExecutabilityHelper(part1, part2, part3, Fb) ]->
+  --[ ClientFinish($C, $S1, $S2, $S3, x, y), ExecutabilityHelper(part1, part2, part3) ]->
     [ ]
 
 
@@ -94,7 +94,7 @@ lemma executability:
           ( ClientInitialise(C, S1, S2, S3, Gx, y)@#i
           & ClientEvaluate(C, S1, S2, S3, Gx)@#j
           & ClientFinish(C, S1, S2, S3, Gx, y)@#k
-          & ExecutabilityHelper(dhExp(dhExp(Gx, Fkoprf1), Fb), dhExp(dhExp(Gx, Fkoprf2), Fb), dhExp(dhExp(Gx, Fkoprf3), Fb), Fb)@#k
+          & ExecutabilityHelper(dhExp(dhExp(Gx, Fkoprf1), Fb), dhExp(dhExp(Gx, Fkoprf2), Fb), dhExp(dhExp(Gx, Fkoprf3), Fb))@#k
         )
       )
     "
