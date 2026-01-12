@@ -48,7 +48,8 @@ rule client_init:
     , FrDH(Fkoprf1), FrDH(Fkoprf2), FrDH(Fkoprf3) ]
   --[ _restrict(DISTINCT($S1, $S2, $S3))
     , ClientInitialise($C, $S1, $S2, $S3, Gx, y)
-    , !Keyshare($C, $S1, Fkoprf1), !Keyshare($C, $S2, Fkoprf2), !Keyshare($C, $S3, Fkoprf3) ]->
+    , !Keyshare($C, $S1, Fkoprf1), !Keyshare($C, $S2, Fkoprf2), !Keyshare($C, $S3, Fkoprf3)
+    , SecretInput(Fe) ]->
     [ !ClientInit($C, Gx)
       // Out-of-band distribution of keyshares. No further server initialisation is needed
     , !Keyshare($C, $S1, Fkoprf1), !Keyshare($C, $S2, Fkoprf2), !Keyshare($C, $S3, Fkoprf3) ]
@@ -65,7 +66,8 @@ rule client_eval:
     in
     [ !ClientInit($C, Gx)
     , FrDH(Fb) ]
-  --[ ClientEvaluate($C, $S1, $S2, $S3, Gx) ]->
+  --[ ClientEvaluate($C, $S1, $S2, $S3, Gx)
+    , BlindingFactor(Fb) ]->
     [ ClientEval($C, $S1, $S2, $S3, Gx, Fb)
     // The servers for reconstruction are picked arbitrarily.
     // In reality, the client would likely remember them during initialisation but here we give the adversary more power.
@@ -76,7 +78,7 @@ rule server_eval:
       Gblinded_input = dhExp(P'g', Ee)
     in
     [ In(<$C, $Si, Gblinded_input>), !Keyshare($C, $Si, Fkoprfi) ]
-  --[ ]->
+  --[ ServerOut(dhExp(Gblinded_input, Fkoprfi)) ]->
     [ Out(<$C, $Si, dhExp(Gblinded_input, Fkoprfi)>) ]
 
 rule client_finish:
@@ -119,6 +121,13 @@ lemma executability:
         )
       )
     "
+
+// Helper lemma to express blinding
+lemma blinding[reuse]:
+    "All Fe Gg #i #j.
+      SecretInput(Fe)@#i
+        & ServerOut(Gg)@#j & Fe << Gg
+      ==> Ex Fb #k. BlindingFactor(Fb)@#k & Fb << Gg"
 
 // Input group element is not learnt by the adversary
 lemma input_secrecy:

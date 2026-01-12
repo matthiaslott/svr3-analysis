@@ -126,34 +126,41 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
   case init_client
   solve( ClientEvaluate( $C, $S1, $S2, $S3, dhExp(P'g', Fe) ) @ #j )
     case evaluate_client
-    solve( ExecutabilityHelper( dhExp(P'g',
-                                      dhTimesE(Fe, dhTimesE(Fkoprf1.1, Fb.1))),
-                                dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.1, Fb.1))),
-                                dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.1, Fb.1)))
-           ) @ #k )
-      case evaluate_finish
-      solve( ClientFinish( $C, $S1, $S2, $S3, dhExp(P'g', Fe),
-                           h(<dhExp(P'g', Fe), 
-                              dhMult(dhExp(P'g', dhTimesE(Fe, Fkoprf1)),
-                                     dhMult(dhExp(P'g', dhTimesE(Fe, Fkoprf2)),
-                                            dhExp(P'g', dhTimesE(Fe, Fkoprf3))))
-                             >)
+    solve( !ClientInit( $C, $S1, $S2, $S3, dhExp(P'g', Fe) ) ▶₀ #j )
+      case init_client
+      solve( ExecutabilityHelper( dhExp(P'g',
+                                        dhTimesE(Fe, dhTimesE(Fkoprf1.1, Fb.1))),
+                                  dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2.1, Fb.1))),
+                                  dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3.1, Fb.1)))
              ) @ #k )
-        case evaluate_finish_case_1
-        by sorry
-      next
-        case evaluate_finish_case_2
-        by sorry
-      next
-        case evaluate_finish_case_3
-        by sorry
-      next
-        case evaluate_finish_case_4
-        solve( !ClientInit( $C, $S1, $S2, $S3, dhExp(P'g', Fe) ) ▶₀ #j )
-          case init_client
-          solve( ClientEval( $C, $S1, $S2, $S3, dhExp(P'g', Fe), Fb.1
-                 ) ▶₀ #k )
-            case evaluate_client_case_1
+        case evaluate_finish
+        solve( ClientEval( $C.1, $S1.1, $S2.1, $S3.1, dhExp(P'g', Ee.1),
+                           Fb.1
+               ) ▶₀ #k )
+          case evaluate_client_case_1
+          solve( ClientFinish( $C, $S1, $S2, $S3, dhExp(P'g', Fe),
+                               h(<dhExp(P'g', Fe), 
+                                  dhMult(dhExp(P'g', dhTimesE(Fe, Fkoprf1)),
+                                         dhMult(dhExp(P'g', dhTimesE(Fe, Fkoprf2)),
+                                                dhExp(P'g', dhTimesE(Fe, Fkoprf3))))
+                                 >)
+                 ) @ #k )
+            case evaluate_finish_case_1
+            by sorry
+          next
+            case evaluate_finish_case_2
+            by sorry
+          next
+            case evaluate_finish_case_3
+            by sorry
+          next
+            case evaluate_finish_case_4
+            by sorry
+          next
+            case evaluate_finish_case_5
+            by sorry
+          next
+            case evaluate_finish_case_6
             solve( !KU( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf1, Fb)))
                    ) @ #vk.6 )
               case coerce
@@ -174,33 +181,16 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
                 case Using_OutFacts_case_5
                 solve( !Initialised( $C.1, $Si, Fkoprf1 ) ▶₁ #vr )
                   case init_server
-                  solve( !KU( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2, Fb)))
-                         ) @ #vk.10 )
-                    case coerce
-                    solve( !KD( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2, Fb)))
-                           ) ▶₀ #vk.1 )
-                      case Using_OutFacts_case_1
-                      by sorry
-                    next
-                      case Using_OutFacts_case_2
-                      by sorry
-                    next
-                      case Using_OutFacts_case_3
-                      by sorry
-                    next
-                      case Using_OutFacts_case_4
-                      by sorry
-                    next
-                      case Using_OutFacts_case_5
-                      by sorry
-                    next
-                      case Using_OutFacts_case_6
-                      solve( !Initialised( $C.2, $Si.1, Fkoprf2 ) ▶₁ #vr.2 )
-                        case init_server
-                        solve( !KU( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3, Fb)))
-                               ) @ #vk.14 )
+                  solve( !KU( Fkoprf1 ) @ #vk.22 )
+                    case init_client
+                    solve( !KU( dhExp(P'g', dhTimesE(Fe, Fb)) ) @ #vk.20 )
+                      case coerce
+                      solve( !KD( dhExp(P'g', dhTimesE(Fe, Fb)) ) ▶₀ #vk.1 )
+                        case Using_OutFacts_case_1
+                        solve( !KU( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2, Fb)))
+                               ) @ #vk.12 )
                           case coerce
-                          solve( !KD( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3, Fb)))
+                          solve( !KD( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf2, Fb)))
                                  ) ▶₀ #vk.2 )
                             case Using_OutFacts_case_1
                             by sorry
@@ -218,65 +208,79 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
                             by sorry
                           next
                             case Using_OutFacts_case_6
-                            by sorry
-                          next
-                            case Using_OutFacts_case_7
-                            solve( !Initialised( $C.3, $Si.2, Fkoprf3 ) ▶₁ #vr.4 )
+                            solve( !Initialised( $C.2, $Si.1, Fkoprf2 ) ▶₁ #vr.2 )
                               case init_server
-                              solve( !KU( dhExp(P'g', dhTimesE(Fe, Fb)) ) @ #vk.22 )
-                                case coerce
-                                solve( !KD( dhExp(P'g', dhTimesE(Fe, Fb)) ) ▶₀ #vk.3 )
-                                  case Using_OutFacts_case_1
-                                  solve( !KU( Fkoprf1 ) @ #vk.28 )
-                                    case init_client
-                                    solve( !KU( Fkoprf2 ) @ #vk.34 )
-                                      case init_client
+                              solve( !KU( Fkoprf2 ) @ #vk.31 )
+                                case init_client
+                                solve( !KU( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3, Fb)))
+                                       ) @ #vk.19 )
+                                  case coerce
+                                  solve( !KD( dhExp(P'g', dhTimesE(Fe, dhTimesE(Fkoprf3, Fb)))
+                                         ) ▶₀ #vk.3 )
+                                    case Using_OutFacts_case_1
+                                    SOLVED // trace found
+                                  next
+                                    case Using_OutFacts_case_2
+                                    SOLVED // trace found
+                                  next
+                                    case Using_OutFacts_case_3
+                                    SOLVED // trace found
+                                  next
+                                    case Using_OutFacts_case_4
+                                    by sorry
+                                  next
+                                    case Using_OutFacts_case_5
+                                    by sorry
+                                  next
+                                    case Using_OutFacts_case_6
+                                    by sorry
+                                  next
+                                    case Using_OutFacts_case_7
+                                    solve( !Initialised( $C.3, $Si.2, Fkoprf3 ) ▶₁ #vr.4 )
+                                      case init_server
                                       solve( !KU( Fkoprf3 ) @ #vk.40 )
                                         case init_client
                                         SOLVED // trace found
                                       qed
                                     qed
                                   qed
-                                next
-                                  case Using_OutFacts_case_2
-                                  by sorry
-                                next
-                                  case Using_OutFacts_case_3
-                                  by sorry
-                                next
-                                  case Using_OutFacts_case_4
-                                  by contradiction /* cyclic */
-                                next
-                                  case Using_OutFacts_case_5
-                                  by contradiction /* cyclic */
-                                next
-                                  case Using_OutFacts_case_6
-                                  by contradiction /* cyclic */
-                                next
-                                  case Using_OutFacts_case_7
-                                  by sorry
                                 qed
                               qed
                             qed
                           qed
                         qed
+                      next
+                        case Using_OutFacts_case_2
+                        by sorry
+                      next
+                        case Using_OutFacts_case_3
+                        by sorry
+                      next
+                        case Using_OutFacts_case_4
+                        by contradiction /* cyclic */
+                      next
+                        case Using_OutFacts_case_5
+                        by sorry
+                      next
+                        case Using_OutFacts_case_6
+                        by sorry
+                      next
+                        case Using_OutFacts_case_7
+                        by sorry
+                      next
+                        case Using_OutFacts_case_8
+                        by sorry
                       qed
                     qed
                   qed
                 qed
               qed
             qed
-          next
-            case evaluate_client_case_2
-            by sorry
           qed
+        next
+          case evaluate_client_case_2
+          by sorry
         qed
-      next
-        case evaluate_finish_case_5
-        by sorry
-      next
-        case evaluate_finish_case_6
-        by sorry
       qed
     qed
   qed
@@ -301,13 +305,28 @@ solve( ClientInitialise( C, S1, S2, S3, Gx, y ) @ #i )
     case coerce
     solve( !KD( dhExp(P'g', Fe) ) ▶₀ #j )
       case Using_OutFacts_case_1
+      by solve( !ClientInit( $C.1, $S1.1, $S2.1, $S3.1,
+                             dhExp(P'g', dhTimesE(Fe, dhInv(Fb)))
+                ) ▶₀ #vr )
+    next
+      case Using_OutFacts_case_2
+      by solve( !ClientInit( $C.1, $S1.1, $S2.1, $S3.1,
+                             dhExp(P'g', dhTimesE(Fe, dhInv(Fb)))
+                ) ▶₀ #vr )
+    next
+      case Using_OutFacts_case_3
+      by solve( !ClientInit( $C.1, $S1.1, $S2.1, $S3.1,
+                             dhExp(P'g', dhTimesE(Fe, dhInv(Fb)))
+                ) ▶₀ #vr )
+    next
+      case Using_OutFacts_case_4
       solve( !Initialised( $C.1, $Si, Fe ) ▶₁ #vr )
         case init_server
         by contradiction /* adversary derived secret element! */
       qed
     next
-      case Using_OutFacts_case_2
-      solve( !Initialised( $C.1, $Si, Fe ) ▶₁ #vr )
+      case Using_OutFacts_case_5
+      solve( !Initialised( $C.1, $Si, Fkoprfi ) ▶₁ #vr )
         case init_server
         by contradiction /* adversary derived secret element! */
       qed
@@ -361,8 +380,8 @@ Failed to derive Variable(s): $C, $S1, $S2, $S3, Ee, Epart1, Epart2, Epart3, Fb
 Generated from:
 Tamarin version 1.11.0
 Maude version 3.5
-Git revision: fed48d7473522ff9bbea72988d04e40a737c4007 (with uncommited changes), branch: dh-with-addition
-Compiled at: 2026-01-09 11:13:28.94069154 UTC
+Git revision: 7e303ccaa581bec3811d2cef19dc73eabc2d65a4 (with uncommited changes), branch: dh-with-addition
+Compiled at: 2026-01-12 08:09:35.343475543 UTC
 */
 
 end
