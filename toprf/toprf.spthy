@@ -48,8 +48,7 @@ rule client_init:
     , FrDH(Fkoprf1), FrDH(Fkoprf2), FrDH(Fkoprf3) ]
   --[ _restrict(DISTINCT($S1, $S2, $S3))
     , ClientInitialise($C, $S1, $S2, $S3, Gx, y)
-    , !Keyshare($C, $S1, Fkoprf1), !Keyshare($C, $S2, Fkoprf2), !Keyshare($C, $S3, Fkoprf3)
-    , SecretInput(Fe) ]->
+    , !Keyshare($C, $S1, Fkoprf1), !Keyshare($C, $S2, Fkoprf2), !Keyshare($C, $S3, Fkoprf3) ]->
     [ !ClientInit($C, Gx)
       // Out-of-band distribution of keyshares. No further server initialisation is needed
     , !Keyshare($C, $S1, Fkoprf1), !Keyshare($C, $S2, Fkoprf2), !Keyshare($C, $S3, Fkoprf3) ]
@@ -66,8 +65,7 @@ rule client_eval:
     in
     [ !ClientInit($C, Gx)
     , FrDH(Fb) ]
-  --[ ClientEvaluate($C, $S1, $S2, $S3, Gx)
-    , BlindingFactor(Fb) ]->
+  --[ ClientEvaluate($C, $S1, $S2, $S3, Gx) ]->
     [ ClientEval($C, $S1, $S2, $S3, Gx, Fb)
     // The servers for reconstruction are picked arbitrarily.
     // In reality, the client would likely remember them during initialisation but here we give the adversary more power.
@@ -78,7 +76,7 @@ rule server_eval:
       Gblinded_input = dhExp(P'g', Ee)
     in
     [ In(<$C, $Si, Gblinded_input>), !Keyshare($C, $Si, Fkoprfi) ]
-  --[ ServerOut(dhExp(Gblinded_input, Fkoprfi)) ]->
+  --[  ]->
     [ Out(<$C, $Si, dhExp(Gblinded_input, Fkoprfi)>) ]
 
 rule client_finish:
@@ -113,21 +111,13 @@ lemma executability:
       &
       // protocol behaviour
       ( Ex C S1 S2 S3 Gx y #i #j #k.
-          ( ClientInitialise(C, S1, S2, S3, Gx, y)@#i
-          & ClientEvaluate(C, S1, S2, S3, Gx)@#j
-          & ClientFinish(C, S1, S2, S3, Gx, y)@#k
-          // nudge Tamarin in the right direction by expressing the expected shape.
-          & Ex Fb Fkoprf1 Fkoprf2 Fkoprf3. ExecutabilityHelper(dhExp(dhExp(Gx, Fkoprf1), Fb), dhExp(dhExp(Gx, Fkoprf2), Fb), dhExp(dhExp(Gx, Fkoprf3), Fb))@#k
-        )
+          ClientInitialise(C, S1, S2, S3, Gx, y)@#i
+        & ClientEvaluate(C, S1, S2, S3, Gx)@#j
+        & ClientFinish(C, S1, S2, S3, Gx, y)@#k
+        // nudge Tamarin in the right direction by expressing the expected shape.
+        & Ex Fb Fkoprf1 Fkoprf2 Fkoprf3. ExecutabilityHelper(dhExp(dhExp(Gx, Fkoprf1), Fb), dhExp(dhExp(Gx, Fkoprf2), Fb), dhExp(dhExp(Gx, Fkoprf3), Fb))@#k
       )
     "
-
-// Helper lemma to express blinding
-lemma blinding[reuse]:
-    "All Fe Gg #i #j.
-      SecretInput(Fe)@#i
-        & ServerOut(Gg)@#j & Fe << Gg
-      ==> Ex Fb #k. BlindingFactor(Fb)@#k & Fb << Gg"
 
 // Input group element is not learnt by the adversary
 lemma input_secrecy:
@@ -143,25 +133,4 @@ lemma output_secrecy:
         ==> (not Ex #j. KU(y)@#j)
     "
 
-
-/* 
- * Bonus Lemmas: Not relevant for TOPRF security but demonstrates Tamarin's features.
- */
-
-// Keyshare is not learnt by the adversary, except through server compromise.
-lemma keyshare_secrecy:
-    "All C Si Fkoprfi #i.
-      !Keyshare(C, Si, Fkoprfi)@#i
-        ==> (not Ex #j. KU(Fkoprfi)@#j)
-        | Ex #j. Compromised(Si)@#j
-    "
-
-// The intermediate result used for computing the output is not learnt by the adversary.
-// Note: Secrecy of h(<Gx, Gres>) (output_secrecy) follows rather trivially from secrecy of Gx (input_secrecy).
-// Here, we additionally show that the second input to the hash function (Gres) is secret.
-lemma res_secrecy:
-    "All C S1 S2 S3 Gx Gres #i.
-      ClientInitialise(C, S1, S2, S3, Gx, h(<Gx, Gres>))@#i
-        ==> (not Ex #j. KU(Gres)@#j)
-    "
 end
