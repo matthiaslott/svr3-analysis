@@ -1,7 +1,7 @@
 theory TOPRF
 
 /*
- * Models a simple TOPRF scheme with 3 servers. All 3 shares are required for reconstruction.
+ * Models a simple additive TOPRF scheme with 3 servers. All 3 shares are required for reconstruction.
  * 
  * Protocol:
  * - Initialisation: Client generates keyshares for the servers and distributes them in a secure channel (think out-of-band). Also, the client generates an input group element.
@@ -50,7 +50,7 @@ rule client_init:
     , ClientInitialise($C, $S1, $S2, $S3, Gx, y)
     , !Keyshare($C, $S1, Fkoprf1), !Keyshare($C, $S2, Fkoprf2), !Keyshare($C, $S3, Fkoprf3) ]->
     [ !ClientInit($C, Gx)
-      // Out-of-band distribution of keyshares. No further server initialisation is needed
+      // Distribution of keyshares using secure channel. No further server initialisation is needed
     , !Keyshare($C, $S1, Fkoprf1), !Keyshare($C, $S2, Fkoprf2), !Keyshare($C, $S3, Fkoprf3) ]
 
 
@@ -94,7 +94,7 @@ rule client_finish:
     , In(<$C, $S1, Gpart1>), In(<$C, $S2, Gpart2>), In(<$C, $S3, Gpart3>) ]
   --[ ClientFinish($C, $S1, $S2, $S3, Gx, y)
     , ExecutabilityHelper(Gpart1, Gpart2, Gpart3) ]->
-    [ ]
+    [  ]
 
 
 
