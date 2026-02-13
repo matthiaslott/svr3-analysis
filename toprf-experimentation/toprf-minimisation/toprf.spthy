@@ -1,0 +1,24 @@
+theory TOPRF
+
+begin
+
+builtins: diffie-hellman
+
+rule client_init:
+    [ Fr(~e), Fr(~b) ]
+  --[ SecretInput('g'^~e) ]->
+    [ Out('g'^~e^~b) ]
+
+rule exp:
+    [ Fr(~y) ]-->[ !Exp(~y) ]
+
+rule server:
+    [ In('g'^x), !Exp(~y) ]
+  --[  ]->
+    [ Out('g'^x^~y) ]
+
+lemma input_secrecy:
+    "All ge #i. SecretInput(ge)@#i ==> not (Ex #k. !KU(ge)@#k)"
+
+end
+

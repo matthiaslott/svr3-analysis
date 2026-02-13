@@ -15,13 +15,15 @@ tamarin-prover proof/proof.spthy
 ```
 .
 ├── model
-│   ├── src/         # Parts of the theory describing brute-force attacks,
-│   │                # secure channel, signatures and TOPRF
+│   ├── src/                # Parts of the theory describing brute-force attacks,
+│   │                       # secure channel, signatures and TOPRF
 │   │
-│   ├── svr3.spthy   # Main Tamarin theory file containing protocol rules
+│   ├── svr3.spthy          # Main Tamarin theory file containing protocol rules
 │   │
-│   └── tactics      # Heuristics for guiding parts of the proofs
+│   └── tactics             # Heuristics for guiding parts of the proofs
 │
-└── proof
-    └── proof.spthy  # Proofs for the SVR3 protocol
+├── proof
+│   └── proof.spthy         # Proofs for the SVR3 protocol
+│
+└── toprf-experimentation/  # Further work experimenting with a different way of modelling the TOPRF
 ```

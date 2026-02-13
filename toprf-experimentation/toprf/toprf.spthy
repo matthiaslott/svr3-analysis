@@ -1,0 +1,136 @@
+theory TOPRF
+
+/*
+ * Models a simple additive TOPRF scheme with 3 servers. All 3 shares are required for reconstruction.
+ * 
+ * Protocol:
+ * - Initialisation: Client generates keyshares for the servers and distributes them in a secure channel (think out-of-band). Also, the client generates an input group element.
+ * - Evaluation: Client evaluates the TOPRF by communicating with the 3 servers.
+ *
+ * Adversary: Standard Dolev-Yao adversary that may additionally compromise servers to read their state.
+ */
+
+begin
+
+builtins: hashing, DH-multiplication
+
+predicates:
+    DISTINCT(x, y, z) <=> not (x = y | x = z | y = z)
+
+
+/*
+ * Adversary Capabilities
+ */
+
+rule compromise:
+    [ !Keyshare($C, $Si, Fkoprfi) ]
+  --[ Compromised($Si)
+    , AdversaryAction() ]->
+    [ Out(Fkoprfi) ]
+
+
+/* 
+ * Initialisation
+ */
+
+rule client_init:
+    let
+      // Input group element
+      Gx = dhExp(P'g', Fe)
+      // Computation of the TOPRF output. Can be performed because in this step, the client knows the server keyshares.
+      Gres1 = dhExp(Gx, Fkoprf1)
+      Gres2 = dhExp(Gx, Fkoprf2)
+      Gres3 = dhExp(Gx, Fkoprf3)
+      Gres = dhMult(dhMult(Gres1, Gres2), Gres3)
+      y = h(<Gx, Gres>)
+    in
+    [ FrDH(Fe)
+    , FrDH(Fkoprf1), FrDH(Fkoprf2), FrDH(Fkoprf3) ]
+  --[ _restrict(DISTINCT($S1, $S2, $S3))
+    , ClientInitialise($C, $S1, $S2, $S3, Gx, y)
+    , !Keyshare($C, $S1, Fkoprf1), !Keyshare($C, $S2, Fkoprf2), !Keyshare($C, $S3, Fkoprf3) ]->
+    [ !ClientInit($C, Gx)
+      // Distribution of keyshares using secure channel. No further server initialisation is needed
+    , !Keyshare($C, $S1, Fkoprf1), !Keyshare($C, $S2, Fkoprf2), !Keyshare($C, $S3, Fkoprf3) ]
+
+
+/*
+ * Evaluation
+ */
+
+rule client_eval:
+    let
+      Gx = dhExp(P'g', Fe) // Fe because Gx was stored in internal state (see ClientInit)
+      Gblinded_input = dhExp(Gx, Fb)
+    in
+    [ !ClientInit($C, Gx)
+    , FrDH(Fb) ]
+  --[ ClientEvaluate($C, $S1, $S2, $S3, Gx) ]->
+    [ ClientEval($C, $S1, $S2, $S3, Gx, Fb)
+    // The servers for reconstruction are picked arbitrarily.
+    // In reality, the client would likely remember them during initialisation but here we give the adversary more power.
+    , Out(<$C, $S1, Gblinded_input>), Out(<$C, $S2, Gblinded_input>), Out(<$C, $S3, Gblinded_input>) ]
+
+rule server_eval:
+    let
+      Gblinded_input = dhExp(P'g', Ee)
+    in
+    [ In(<$C, $Si, Gblinded_input>), !Keyshare($C, $Si, Fkoprfi) ]
+  --[  ]->
+    [ Out(<$C, $Si, dhExp(Gblinded_input, Fkoprfi)>) ]
+
+rule client_finish:
+    let
+      Gx = dhExp(P'g', Fe) // Fe because Gx was stored in internal state (see ClientInit)
+      // Build the TOPRF output from the server responses
+      Gpart1 = dhExp(P'g', Epart1)
+      Gpart2 = dhExp(P'g', Epart2)
+      Gpart3 = dhExp(P'g', Epart3)
+      Gpart = dhMult(dhMult(Gpart1, Gpart2), Gpart3)
+      Gres = dhExp(Gpart, dhInv(Fb))
+      y = h(<Gx, Gres>)
+    in
+    [ ClientEval($C, $S1, $S2, $S3, Gx, Fb)
+    , In(<$C, $S1, Gpart1>), In(<$C, $S2, Gpart2>), In(<$C, $S3, Gpart3>) ]
+  --[ ClientFinish($C, $S1, $S2, $S3, Gx, y)
+    , ExecutabilityHelper(Gpart1, Gpart2, Gpart3) ]->
+    [  ]
+
+
+
+
+
+/*
+ * Lemmas
+ */
+
+lemma executability:
+    exists-trace "
+      // adversary doesn't do anything
+      not (Ex #i. AdversaryAction()@#i)
+      &
+      // protocol behaviour
+      ( Ex C S1 S2 S3 Gx y #i #j #k.
+          ClientInitialise(C, S1, S2, S3, Gx, y)@#i
+        & ClientEvaluate(C, S1, S2, S3, Gx)@#j
+        & ClientFinish(C, S1, S2, S3, Gx, y)@#k
+        // nudge Tamarin in the right direction by expressing the expected shape.
+        & Ex Fb Fkoprf1 Fkoprf2 Fkoprf3. ExecutabilityHelper(dhExp(dhExp(Gx, Fkoprf1), Fb), dhExp(dhExp(Gx, Fkoprf2), Fb), dhExp(dhExp(Gx, Fkoprf3), Fb))@#k
+      )
+    "
+
+// Input group element is not learnt by the adversary
+lemma input_secrecy:
+    "All C S1 S2 S3 Gx y #i.
+      ClientInitialise(C, S1, S2, S3, Gx, y)@#i
+        ==> (not Ex #j. KU(Gx)@#j)
+    "
+
+// Output is not learnt by the adversary
+lemma output_secrecy:
+    "All C S1 S2 S3 Gx y #i.
+      ClientInitialise(C, S1, S2, S3, Gx, y)@#i
+        ==> (not Ex #j. KU(y)@#j)
+    "
+
+end

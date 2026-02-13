@@ -1,0 +1,277 @@
+theory TOPRF begin
+
+// Function signature and definition of the equational theory E
+
+builtins: diffie-hellman
+functions: fst/1, pair/2, snd/1
+equations: fst(<x.1, x.2>) = x.1, snd(<x.1, x.2>) = x.2
+
+
+
+
+
+
+
+rule (modulo E) client_init:
+   [ Fr( ~e ), Fr( ~b ) ]
+  --[ SecretInput( 'g'^~e ) ]->
+   [ Out( 'g'^~e^~b ) ]
+
+  /*
+  rule (modulo AC) client_init:
+     [ Fr( ~e ), Fr( ~b ) ]
+    --[ SecretInput( 'g'^~e ) ]->
+     [ Out( 'g'^(~b*~e) ) ]
+  */
+
+rule (modulo E) exp:
+   [ Fr( ~y ) ] --> [ !Exp( ~y ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) server:
+   [ In( 'g'^x ), !Exp( ~y ) ] --> [ Out( 'g'^x^~y ) ]
+
+  /*
+  rule (modulo AC) server:
+     [ In( z ), !Exp( ~y ) ] --> [ Out( z.1 ) ]
+    variants (modulo AC)
+    1. ~y    = ~x.5
+       z     = 'g'^inv(~x.5)
+       z.1   = 'g'
+    
+    2. ~y    = ~x.5
+       z     = 'g'^inv((~x.5*x.6))
+       z.1   = 'g'^inv(x.6)
+    
+    3. ~y    = ~x.5
+       z     = 'g'^(x.6*inv(~x.5))
+       z.1   = 'g'^x.6
+    
+    4. ~y    = ~x.5
+       z     = 'g'^(x.6*inv((~x.5*x.7)))
+       z.1   = 'g'^(x.6*inv(x.7))
+    
+    5. ~y    = ~y.5
+       z     = 'g'
+       z.1   = 'g'^~y.5
+    
+    6. ~y    = ~y.5
+       z     = 'g'^x.5
+       z.1   = 'g'^(~y.5*x.5)
+  */
+
+lemma input_secrecy:
+  all-traces
+  "∀ ge #i. (SecretInput( ge ) @ #i) ⇒ (¬(∃ #k. !KU( ge ) @ #k))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ ge #i. (SecretInput( ge ) @ #i) ∧ ∃ #k. (!KU( ge ) @ #k)"
+*/
+simplify
+solve( !KU( 'g'^~e ) @ #k )
+  case c_exp
+  by solve( !KU( ~e ) @ #vk.1 )
+next
+  case server_case_1
+  solve( !KU( 'g'^(~e*inv(~y)) ) @ #vk )
+    case c_exp
+    by solve( !KU( ~e ) @ #vk.3 )
+  next
+    case server_case_01
+    by contradiction /* non-normal terms */
+  next
+    case server_case_02
+    by contradiction /* cyclic */
+  next
+    case server_case_03
+    by contradiction /* non-normal terms */
+  next
+    case server_case_04
+    by solve( !KU( ~y ) @ #vk.6 )
+  next
+    case server_case_05
+    by solve( !KU( ~y ) @ #vk.4 )
+  next
+    case server_case_06
+    by solve( !KU( ~e ) @ #vk.2 )
+  next
+    case server_case_07
+    by solve( !KU( ~e ) @ #vk.4 )
+  next
+    case server_case_08
+    solve( !KU( 'g'^(~e*inv((~y*~y.1))) ) @ #vk.1 )
+      case c_exp
+      by solve( !KU( ~e ) @ #vk.4 )
+    next
+      case server_case_01
+      by contradiction /* non-normal terms */
+    next
+      case server_case_02
+      by contradiction /* cyclic */
+    next
+      case server_case_03
+      by contradiction /* non-normal terms */
+    next
+      case server_case_04
+      by solve( !KU( ~y ) @ #vk.8 )
+    next
+      case server_case_05
+      by solve( !KU( ~y ) @ #vk.7 )
+    next
+      case server_case_06
+      by solve( !KU( ~e ) @ #vk.3 )
+    next
+      case server_case_07
+      by solve( !KU( ~e ) @ #vk.4 )
+    next
+      case server_case_08
+      by solve( !KU( ~e ) @ #vk.4 )
+    next
+      case server_case_09
+      by solve( !KU( ~e ) @ #vk.5 )
+    next
+      case server_case_10
+      by solve( !KU( ~e ) @ #vk.5 )
+    next
+      case server_case_11
+      by solve( !KU( ~e ) @ #vk.5 )
+    next
+      case server_case_12
+      by sorry /* removed */
+    next
+      case server_case_13
+      by sorry
+    next
+      case server_case_14
+      by contradiction /* non-normal terms */
+    next
+      case server_case_15
+      by sorry
+    next
+      case server_case_16
+      by contradiction /* cyclic */
+    next
+      case server_case_17
+      by sorry
+    next
+      case server_case_18
+      by sorry
+    next
+      case server_case_19
+      by sorry
+    next
+      case server_case_20
+      by contradiction /* non-normal terms */
+    next
+      case server_case_21
+      by sorry
+    next
+      case server_case_22
+      by sorry
+    next
+      case server_case_23
+      by sorry
+    next
+      case server_case_24
+      by sorry
+    next
+      case server_case_25
+      by sorry
+    next
+      case server_case_26
+      by sorry
+    next
+      case server_case_27
+      by sorry
+    next
+      case server_case_28
+      by sorry
+    next
+      case server_case_29
+      by sorry
+    next
+      case server_case_30
+      by sorry
+    next
+      case server_case_31
+      by sorry
+    next
+      case server_case_32
+      by sorry
+    next
+      case server_case_33
+      by sorry
+    next
+      case server_case_34
+      by sorry
+    qed
+  next
+    case server_case_09
+    by sorry
+  next
+    case server_case_10
+    by contradiction /* non-normal terms */
+  next
+    case server_case_11
+    by sorry
+  next
+    case server_case_12
+    by sorry
+  next
+    case server_case_13
+    by sorry
+  next
+    case server_case_14
+    by contradiction /* non-normal terms */
+  next
+    case server_case_15
+    by sorry
+  next
+    case server_case_16
+    by sorry
+  next
+    case server_case_17
+    by sorry
+  next
+    case server_case_18
+    by sorry
+  qed
+next
+  case server_case_2
+  by sorry
+next
+  case server_case_3
+  by sorry
+next
+  case server_case_4
+  by sorry
+qed
+
+
+
+
+
+
+
+/*
+WARNING: the following wellformedness checks failed!
+
+Message Derivation Checks
+=========================
+
+  The variables of the following rule(s) are not derivable from their premises, you may be performing unintended pattern matching.
+
+Rule server: 
+Failed to derive Variable(s): x
+*/
+
+/*
+Generated from:
+Tamarin version 1.11.0
+Maude version 3.5
+Git revision: a6df687a05c2473573749494bdd7752b109f22ae, branch: develop
+Compiled at: 2024-12-02 16:31:14.867376732 UTC
+*/
+
+end
